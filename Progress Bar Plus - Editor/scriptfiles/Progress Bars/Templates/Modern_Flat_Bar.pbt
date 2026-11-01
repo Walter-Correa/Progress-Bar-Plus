@@ -1,0 +1,23 @@
+; Progress Bar Plus - Bar Template (.pbt)
+[Template]
+Name=ActionProgress
+Style=0
+PosX=245.0000
+PosY=370.0000
+Width=150.0000
+Height=9.0000
+Color=0x38BDF8FF
+MaxValue=100.0000
+Value=70.0000
+Direction=0
+BorderSize=1.0000
+BorderColor=0x0F172AF0
+Segments=24
+SegmentScale=1.0000
+AutoFill=0
+AutoFillMax=-1.0000
+Blinking=0
+BlinkInterval=250
+BlinkDuration=0
+BlinkColor=0x00000000
+BlinkBorderColor=0x00000000

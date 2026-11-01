@@ -3,8 +3,8 @@
     Progress Bar Plus - A high-performance, modern progress bar and visual
     gauge library for SA-MP and Open.MP.
 
-    Author:      Walter CorrÃªa
-    Version:     1.0.0
+    Author:      Walter Corrêa
+    Version:     2.0.0
     Repository:  https://github.com/Walter-Correa/Progress-Bar-Plus
     License:     Mozilla Public License 2.0 (MPL-2.0)
 ================================================================================
@@ -16,118 +16,272 @@
 #define _progressbar_included
 #define _progressbarplus_included
 
-#include <a_samp>
+#if !defined _samp_included && !defined _INC_open_mp
+	#if __Pawn >= 0x030A
+		#tryinclude <open.mp>
+	#endif
+	#if !defined _INC_open_mp
+		#include <a_samp>
+	#endif
+#endif
 
+#if !defined PBP_DEFAULT_COLOUR
+	#if defined PB_DEFAULT_COLOUR
+		#define PBP_DEFAULT_COLOUR (PB_DEFAULT_COLOUR)
+	#else
+		#define PBP_DEFAULT_COLOUR (0xE74C3CFF)
+	#endif
+#endif
 #if !defined PB_DEFAULT_COLOUR
-	#define PB_DEFAULT_COLOUR (0xE74C3CFF)
+	#define PB_DEFAULT_COLOUR PBP_DEFAULT_COLOUR
+#endif
+
+#if !defined PBP_BORDER_DEFAULT
+	#if defined PBP_BORDER
+		#define PBP_BORDER_DEFAULT (PBP_BORDER)
+	#elseif defined PB_BORDER
+		#define PBP_BORDER_DEFAULT (PB_BORDER)
+	#elseif defined PB_BORDER_DEFAULT
+		#define PBP_BORDER_DEFAULT (PB_BORDER_DEFAULT)
+	#else
+		#define PBP_BORDER_DEFAULT (1.0)
+	#endif
 #endif
 #if !defined PB_BORDER_DEFAULT
-	#if defined PB_BORDER
-		#define PB_BORDER_DEFAULT (PB_BORDER)
+	#define PB_BORDER_DEFAULT PBP_BORDER_DEFAULT
+#endif
+
+#if !defined PBP_BORDER_MIN
+	#if defined PB_BORDER_MIN
+		#define PBP_BORDER_MIN (PB_BORDER_MIN)
 	#else
-		#define PB_BORDER_DEFAULT (1.0)
+		#define PBP_BORDER_MIN (0.5)
 	#endif
 #endif
 #if !defined PB_BORDER_MIN
-	#define PB_BORDER_MIN (0.5)
+	#define PB_BORDER_MIN PBP_BORDER_MIN
+#endif
+
+#if !defined PBP_BORDER_MAX
+	#if defined PB_BORDER_MAX
+		#define PBP_BORDER_MAX (PB_BORDER_MAX)
+	#else
+		#define PBP_BORDER_MAX (5.0)
+	#endif
 #endif
 #if !defined PB_BORDER_MAX
-	#define PB_BORDER_MAX (5.0)
+	#define PB_BORDER_MAX PBP_BORDER_MAX
+#endif
+
+#if !defined PBP_BORDER_Y_RATIO
+	#if defined PB_BORDER_Y_RATIO
+		#define PBP_BORDER_Y_RATIO (PB_BORDER_Y_RATIO)
+	#else
+		#define PBP_BORDER_Y_RATIO (1.25)
+	#endif
 #endif
 #if !defined PB_BORDER_Y_RATIO
-	#define PB_BORDER_Y_RATIO (1.25)
+	#define PB_BORDER_Y_RATIO PBP_BORDER_Y_RATIO
+#endif
+
+#if !defined PBP_MIN_INNER
+	#if defined PB_MIN_INNER
+		#define PBP_MIN_INNER (PB_MIN_INNER)
+	#else
+		#define PBP_MIN_INNER (1.0)
+	#endif
 #endif
 #if !defined PB_MIN_INNER
-	#define PB_MIN_INNER (1.0)
+	#define PB_MIN_INNER PBP_MIN_INNER
+#endif
+
+#if !defined PBP_BLINK_DEFAULT
+	#if defined PB_BLINK_DEFAULT
+		#define PBP_BLINK_DEFAULT (PB_BLINK_DEFAULT)
+	#else
+		#define PBP_BLINK_DEFAULT (250)
+	#endif
 #endif
 #if !defined PB_BLINK_DEFAULT
-	#define PB_BLINK_DEFAULT (250)
+	#define PB_BLINK_DEFAULT PBP_BLINK_DEFAULT
+#endif
+
+#if !defined PBP_BLINK_MIN
+	#if defined PB_BLINK_MIN
+		#define PBP_BLINK_MIN (PB_BLINK_MIN)
+	#else
+		#define PBP_BLINK_MIN (50)
+	#endif
 #endif
 #if !defined PB_BLINK_MIN
-	#define PB_BLINK_MIN (50)
+	#define PB_BLINK_MIN PBP_BLINK_MIN
+#endif
+
+#if !defined PBP_BLINK_MAX
+	#if defined PB_BLINK_MAX
+		#define PBP_BLINK_MAX (PB_BLINK_MAX)
+	#else
+		#define PBP_BLINK_MAX (60000)
+	#endif
 #endif
 #if !defined PB_BLINK_MAX
-	#define PB_BLINK_MAX (60000)
+	#define PB_BLINK_MAX PBP_BLINK_MAX
 #endif
+
 #if !defined MAX_PLAYER_BARS
 	#define MAX_PLAYER_BARS (_:MAX_PLAYER_TEXT_DRAWS / 3)
 #endif
+
+#if !defined PBP_RING_SEGMENTS
+	#if defined PB_RING_SEGMENTS
+		#define PBP_RING_SEGMENTS (PB_RING_SEGMENTS)
+	#else
+		#define PBP_RING_SEGMENTS (24)
+	#endif
+#endif
 #if !defined PB_RING_SEGMENTS
-	#define PB_RING_SEGMENTS (24)
+	#define PB_RING_SEGMENTS PBP_RING_SEGMENTS
+#endif
+
+#if !defined PBP_RING_SEGMENT_SCALE
+	#if defined PB_RING_SEGMENT_SCALE
+		#define PBP_RING_SEGMENT_SCALE (PB_RING_SEGMENT_SCALE)
+	#else
+		#define PBP_RING_SEGMENT_SCALE (1.0)
+	#endif
 #endif
 #if !defined PB_RING_SEGMENT_SCALE
-	#define PB_RING_SEGMENT_SCALE (1.0)
+	#define PB_RING_SEGMENT_SCALE PBP_RING_SEGMENT_SCALE
+#endif
+
+#if !defined PBP_RING_MIN
+	#if defined PB_RING_MIN
+		#define PBP_RING_MIN (PB_RING_MIN)
+	#else
+		#define PBP_RING_MIN (4)
+	#endif
 #endif
 #if !defined PB_RING_MIN
-	#define PB_RING_MIN (4)
+	#define PB_RING_MIN PBP_RING_MIN
+#endif
+
+#if !defined PBP_RING_MAX
+	#if defined PB_RING_MAX
+		#define PBP_RING_MAX (PB_RING_MAX)
+	#else
+		#define PBP_RING_MAX (60)
+	#endif
 #endif
 #if !defined PB_RING_MAX
-	#define PB_RING_MAX (60)
+	#define PB_RING_MAX PBP_RING_MAX
 #endif
 
+#if !defined PBP_AUTOFILL_TICK
+	#if defined PB_AUTOFILL_TICK
+		#define PBP_AUTOFILL_TICK (PB_AUTOFILL_TICK)
+	#else
+		#define PBP_AUTOFILL_TICK (50)
+	#endif
+#endif
 #if !defined PB_AUTOFILL_TICK
-	#define PB_AUTOFILL_TICK (50)
+	#define PB_AUTOFILL_TICK PBP_AUTOFILL_TICK
+#endif
+
+#if !defined PBP_AUTOFILL_RISE
+	#define PBP_AUTOFILL_RISE (1000)
 #endif
 #if !defined PB_AUTOFILL_RISE
-	#define PB_AUTOFILL_RISE (1000)
-#endif
-#if !defined PB_AUTOFILL_HOLD_TOP
-	#define PB_AUTOFILL_HOLD_TOP (400)
-#endif
-#if !defined PB_AUTOFILL_FALL
-	#define PB_AUTOFILL_FALL (1000)
-#endif
-#if !defined PB_AUTOFILL_HOLD_BASE
-	#define PB_AUTOFILL_HOLD_BASE (300)
+	#define PB_AUTOFILL_RISE PBP_AUTOFILL_RISE
 #endif
 
-#define PB_CHIT_SCALE (1.5)
-#define PB_MAX_TDS (_:MAX_PLAYER_TEXT_DRAWS)
+#if !defined PBP_AUTOFILL_HOLD_TOP
+	#define PBP_AUTOFILL_HOLD_TOP (400)
+#endif
+#if !defined PB_AUTOFILL_HOLD_TOP
+	#define PB_AUTOFILL_HOLD_TOP PBP_AUTOFILL_HOLD_TOP
+#endif
+
+#if !defined PBP_AUTOFILL_FALL
+	#define PBP_AUTOFILL_FALL (1000)
+#endif
+#if !defined PB_AUTOFILL_FALL
+	#define PB_AUTOFILL_FALL PBP_AUTOFILL_FALL
+#endif
+
+#if !defined PBP_AUTOFILL_HOLD_BASE
+	#define PBP_AUTOFILL_HOLD_BASE (300)
+#endif
+#if !defined PB_AUTOFILL_HOLD_BASE
+	#define PB_AUTOFILL_HOLD_BASE PBP_AUTOFILL_HOLD_BASE
+#endif
+
+#define PBP_CHIT_SCALE (1.5)
+#define PB_CHIT_SCALE PBP_CHIT_SCALE
+
+#define PBP_MAX_TDS (_:MAX_PLAYER_TEXT_DRAWS)
+#define PB_MAX_TDS PBP_MAX_TDS
 
 #define INVALID_PLAYER_BAR_VALUE (Float:0xFFFFFFFF)
 #define INVALID_PLAYER_BAR_ID (-1)
 
 #if defined TEXT_DRAW_FONT_SPRITE_DRAW
-	#define PB_SPRITE_FONT TEXT_DRAW_FONT_SPRITE_DRAW
+	#define PBP_SPRITE_FONT TEXT_DRAW_FONT_SPRITE_DRAW
 #else
-	#define PB_SPRITE_FONT 4
+	#define PBP_SPRITE_FONT 4
 #endif
+#define PB_SPRITE_FONT PBP_SPRITE_FONT
 
 #if defined PlayerTextDrawColour
-	#define PB_TextDrawColour PlayerTextDrawColour
+	#define PBP_TextDrawColour PlayerTextDrawColour
 #else
-	#define PB_TextDrawColour PlayerTextDrawColor
+	#define PBP_TextDrawColour PlayerTextDrawColor
 #endif
+#define PB_TextDrawColour PBP_TextDrawColour
 
 #if defined INVALID_PLAYER_TEXT_DRAW
-	#define PB_NO_TD INVALID_PLAYER_TEXT_DRAW
+	#define PBP_NO_TD INVALID_PLAYER_TEXT_DRAW
 #else
-	#define PB_NO_TD (PlayerText:INVALID_TEXT_DRAW)
+	#define PBP_NO_TD (PlayerText:INVALID_TEXT_DRAW)
 #endif
+#define PB_NO_TD PBP_NO_TD
 
-#define PB_TD_PART (0xFFFF)
-#define PB_TD_KNOWN (0x20000000)
-#define PB_TD_SHOWN (0x40000000)
+#define PBP_TD_PART (0xFFFF)
+#define PB_TD_PART PBP_TD_PART
 
-enum
-{
-	PB_DIR_RIGHT,
-	PB_DIR_LEFT,
-	PB_DIR_UP,
-	PB_DIR_DOWN
-};
+#define PBP_TD_KNOWN (0x20000000)
+#define PB_TD_KNOWN PBP_TD_KNOWN
 
-#define BAR_DIRECTION_RIGHT PB_DIR_RIGHT
-#define BAR_DIRECTION_LEFT  PB_DIR_LEFT
-#define BAR_DIRECTION_UP    PB_DIR_UP
-#define BAR_DIRECTION_DOWN  PB_DIR_DOWN
+#define PBP_TD_SHOWN (0x40000000)
+#define PB_TD_SHOWN PBP_TD_SHOWN
 
 enum
 {
-	PB_STYLE_BAR,
-	PB_STYLE_RING,
-	PB_STYLE_CIRCLE
+	PBP_DIR_RIGHT,
+	PBP_DIR_LEFT,
+	PBP_DIR_UP,
+	PBP_DIR_DOWN
 };
+
+#define PB_DIR_RIGHT PBP_DIR_RIGHT
+#define PB_DIR_LEFT  PBP_DIR_LEFT
+#define PB_DIR_UP    PBP_DIR_UP
+#define PB_DIR_DOWN  PBP_DIR_DOWN
+
+#define BAR_DIRECTION_RIGHT PBP_DIR_RIGHT
+#define BAR_DIRECTION_LEFT  PBP_DIR_LEFT
+#define BAR_DIRECTION_UP    PBP_DIR_UP
+#define BAR_DIRECTION_DOWN  PBP_DIR_DOWN
+
+enum
+{
+	PBP_STYLE_BAR,
+	PBP_STYLE_RING,
+	PBP_STYLE_CIRCLE
+};
+
+#define PB_STYLE_BAR    PBP_STYLE_BAR
+#define PB_STYLE_RING   PBP_STYLE_RING
+#define PB_STYLE_CIRCLE PBP_STYLE_CIRCLE
 
 enum ProgressBar_Data
 {
@@ -175,9 +329,11 @@ static stock PB_TDColour[MAX_PLAYERS][PB_MAX_TDS];
 ================================================================================
 */
 
-static stock PlayerText:PB_Sprite(playerid, Float:x, Float:y, Float:width, Float:height, colour, sprite[] = "LD_SPAC:white")
+static stock PlayerText:PB_Sprite(playerid, Float:x, Float:y, Float:width, Float:height, colour, const sprite[] = "LD_SPAC:white")
 {
-	new PlayerText:td = CreatePlayerTextDraw(playerid, x, y, sprite);
+	new buf[32];
+	strcat(buf, sprite, sizeof buf);
+	new PlayerText:td = CreatePlayerTextDraw(playerid, x, y, buf);
 	if (td == PB_NO_TD) return td;
 	PlayerTextDrawFont(playerid, td, PB_SPRITE_FONT);
 	PlayerTextDrawTextSize(playerid, td, width, height);

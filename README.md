@@ -65,6 +65,79 @@
 | **Pulsing & Critical Alerts** | ❌ None (requires manual gamemode timer and color toggling logic) | ✅ Built-in multi-phase blinking engine (`BlinkPlayerProgressBar`) with independent colors |
 | **Multi-Element Network Caching** | Not applicable (only supports basic 3-textdraw rectangular bars) | ✅ Per-segment delta cache (`PB_TDColour`), updating only modified dots to prevent packet flooding |
 | **Tagging & Type Safety** | Requires strict `PlayerBar:` tag (produces tag mismatch warnings if handled as raw integer) | ✅ Standard integer IDs with backward compatibility tag/direction macros (zero compiler warnings) |
+| **In-Game Visual Editor** | Basic single-bar scripts (`editor-pottus.pwn` / `editor-emmet.pwn`), export-only | ✅ Full **Progress Bar Plus - Editor** with clickable 11-button Dock, 20-layer Z-order stack, `.pbp` projects, `.pbt` templates, Pawn code importer, 3-format exporter & Undo |
+
+---
+
+## Progress Bar Plus - Editor (v2.0.0)
+
+**Progress Bar Plus v2.0.0** ships with a complete, plug-and-play in-game visual design and code generation filterscript located in `Progress Bar Plus - Editor/`. Built from the ground up with a lightweight, highly optimized **Session Pool** architecture (supporting up to 10 concurrent editors with automatic Project Lock protection) and **Pawn.CMD**, it works seamlessly on both **SA-MP** and **open.mp**.
+
+### Directory Structure
+
+```text
+Progress Bar Plus - Editor/
+├── filterscripts/
+│   ├── FS_ProgressBarEditor.pwn         # Full Editor filterscript source (English, Windows-1252)
+│   └── FS_ProgressBarEditor.amx         # Precompiled plug-and-play Editor binary
+├── gamemodes/
+│   ├── GM_ProgressBarEditor.pwn         # Lightweight sandbox test server gamemode
+│   └── GM_ProgressBarEditor.amx         # Precompiled test server gamemode binary
+├── pawno/
+│   └── include/                         # Bundled open.mp, SA-MP, Pawn.CMD & ProgressBar includes
+├── scriptfiles/
+│   └── Progress Bars/
+│       ├── Projects/                    # Multi-bar workspace projects (.pbp) + _index.lst
+│       ├── Templates/                   # Reusable single-bar presets (.pbt) + _index.lst
+│       ├── Imports/                     # Drop external .pbp or .pwn/.inc/.txt code here
+│       ├── Exports/                     # Generated production Pawn code (.pwn, .inc, _raw.txt)
+│       └── README.txt                   # Quick-reference workspace guide
+├── config.json                          # Ready-to-run open.mp test server config
+└── omp-server.exe                       # Bundled open.mp server executable
+```
+
+### Plug-and-Play Setup
+
+1. Ensure [`Pawn.CMD`](https://github.com/urShadow/Pawn.CMD) is installed in your server's `plugins/` (or `components/`) folder and `ProgressBar.inc` is placed in `pawno/include/` (or `qawno/include/`).
+2. Copy the `filterscripts/` and `scriptfiles/` folders from `Progress Bar Plus - Editor/` into your server root directory (or run the bundled test server directly with `GM_ProgressBarEditor`).
+3. Add `FS_ProgressBarEditor` to your `filterscripts` line in `server.cfg` (SA-MP) or `pawn.side_scripts` / `pawn.legacy_scripts` in `config.json` (open.mp).
+4. Join the server and type **`/pbeditor`** (or **`/pbe`**) to launch the Editor Dock!
+
+### Key Editor Capabilities
+
+* **Clickable 11-Button Editor Dock & Live Telemetry HUD:**
+  * Access `PROJECT`, `+ CREATE`, `LAYERS`, `MOVE`, `RESIZE`, `STYLE`, `COLORS`, `ANIMATE`, `TOOLS`, `EXPORT`, and `VIEW` with your mouse cursor.
+  * Dock can be flipped between **Bottom** and **Top**, or minimized into a compact `EDITOR UI` pill for unobstructed fullscreen HUD previews.
+  * Press **`ESC`** anytime to pause the cursor and test your HUD while walking or driving; press **`Y`** (or `/pbselect`) to recall the Editor Cursor immediately.
+* **20-Layer Workspace & Z-Order Manager:**
+  * Design complete multi-bar HUDs (up to 20 simultaneous bars per project), rename Pawn variable identifiers, duplicate layers, toggle visibility, reorder Z-index rendering (`Bring Forward`, `Send Backward`, `Bring to Front`, `Send to Back`), and revert changes with **1-Step Snapshot Undo**.
+* **Real-Time Transform Engine (`35ms`):**
+  * Move, resize, adjust border thickness, or scrub fill values live using **`W/A/S/D`** or **Arrow Keys**.
+  * Hold **`SHIFT`** or **`CTRL`** (or **`SPACE`**) for `2.5px` fast adjustments, hold **`ALT`** for `0.1px` micro-precision, press **`C`** during Move to cycle Grid Snapping (`OFF` / `1.0px` / `5.0px`), or press **`C`** during Ring/Circle Resize to lock the **$16:9$ Perfect Circle Ratio** (`Height = Width * 1.25`).
+  * Press **`F` / `ENTER`** to save changes, or **`N`** to cancel and revert.
+* **Precision Layout, Alignment & GTA:SA Anchors:**
+  * Snap bars to 8 native GTA:SA HUD anchor slots (Health, Armour, Below Money, Above Radar, Around Radar $16:9$ Ring, Action Cast Bar, Speedometer Dial, Center Skill Gauge), center on screen, or align/match/stack bars relative to another layer with custom pixel spacing.
+* **Universal Import & 3-Format Code Export:**
+  * **Import:** Open `.pbp` projects, merge `.pbp` layers into an active workspace, parse existing `.pwn` / `.inc` / `.txt` scripts containing `CreatePlayerProgressBar(...)` calls from `Imports/`, or paste a code snippet directly into an in-game dialog.
+  * **Export:** Generate complete Gamemode scripts (`Exports/<Project>.pwn`), include-guarded modular headers (`Exports/<Project>.inc`), or concise raw snippets (`Exports/<Project>_raw.txt`) with `Create`, `Show`, `Hide`, and `Destroy` helpers.
+
+### Editor Commands (`Pawn.CMD`)
+
+| Command | Aliases | Description |
+| :--- | :--- | :--- |
+| `/pbeditor` | `/pbe`, `/progressbar` | Opens the Editor or restores the Dock & mouse cursor. |
+| `/pbselect` | `/pbcursor` | Restores the mouse cursor to interact with the Editor Dock (hotkey: **`Y`**). |
+| `/pbnew [name]` | — | Resets the workspace and starts a new blank HUD project. |
+| `/pbload [name]` | `/pbopen` | Opens the `.pbp` Project Browser or loads a project directly by filename. |
+| `/pbsave [name]` | — | Quick-saves the active `.pbp` project (or saves under a new name). |
+| `/pbimport [file]` | — | Opens the Universal Import Hub or parses a Pawn file from `Imports/`. |
+| `/pbexport [name]` | — | Opens the Export Generator or quick-exports a `.pwn` script to `Exports/`. |
+| `/pbadd [bar\|ring\|circle]` | — | Spawns a new progress bar layer directly in the specified style. |
+| `/pbpreview` | — | Toggles fullscreen clean HUD preview (minimizes/restores Editor Dock). |
+| `/pbundo` | — | Reverts the last workspace modification using the snapshot undo buffer. |
+| `/pblock` | — | *(RCON Admin)* Toggles RCON-only access restriction on the live server. |
+| `/pbhelp` | — | Displays the in-game Editor Reference Manual and hotkey guide. |
+| `/pbexit` | `/pbclose` | Safely closes the Editor session (prompts if unsaved changes exist). |
 
 ---
 
@@ -89,29 +162,29 @@ Add the include near the top of your gamemode or filterscript, after `<a_samp>`:
 
 ## Configuration & Compile-Time Defines
 
-You can override any of the following definitions before including `<ProgressBar>` to tailor the library to your server's exact specifications:
+You can override any of the following definitions before including `<ProgressBar>` to tailor the library to your server's exact specifications. All constants use the modern `PBP_` prefix, while legacy `PB_` aliases are automatically provided for backward compatibility:
 
-| Constant | Default Value | Range / Unit | Description |
-| :--- | :---: | :---: | :--- |
-| `MAX_PLAYER_BARS` | `MAX_PLAYER_TEXT_DRAWS / 3` | $1$ – $85$ | Maximum simultaneous progress bars allocated per player. |
-| `PB_DEFAULT_COLOUR` | `0xE74C3CFF` | RGBA Hex | Default bar color (modern flat red). |
-| `PB_BORDER_DEFAULT` | `1.0` | Float (units) | Default border thickness on side edges. |
-| `PB_BORDER_MIN` | `0.5` | Float (units) | Minimum allowed border thickness. |
-| `PB_BORDER_MAX` | `5.0` | Float (units) | Maximum allowed border thickness. |
-| `PB_BORDER_Y_RATIO` | `1.25` | Float (ratio) | Vertical border scaling factor to match $16:9$ pixel aspect ratio. |
-| `PB_MIN_INNER` | `1.0` | Float (units) | Minimum guaranteed inner fill area preserved inside borders. |
-| `PB_BLINK_DEFAULT` | `250` | Milliseconds | Default toggle interval for blinking bars. |
-| `PB_BLINK_MIN` | `50` | Milliseconds | Minimum allowed blink toggle interval. |
-| `PB_BLINK_MAX` | `60000` | Milliseconds | Maximum allowed blink toggle interval. |
-| `PB_RING_SEGMENTS` | `24` | Segments | Default segment count for `PB_STYLE_RING`. |
-| `PB_RING_SEGMENT_SCALE` | `1.0` | Float (scale) | Default relative size multiplier for ring segment dots. |
-| `PB_RING_MIN` | `4` | Segments | Minimum allowed segment count for rings. |
-| `PB_RING_MAX` | `60` | Segments | Maximum allowed segment count for rings. |
-| `PB_AUTOFILL_TICK` | `50` | Milliseconds | Timer tick rate for smooth auto-fill animations. |
-| `PB_AUTOFILL_RISE` | `1000` | Milliseconds | Duration of the auto-fill upward rising phase. |
-| `PB_AUTOFILL_HOLD_TOP` | `400` | Milliseconds | Pause duration when auto-fill reaches the peak. |
-| `PB_AUTOFILL_FALL` | `1000` | Milliseconds | Duration of the auto-fill downward falling phase. |
-| `PB_AUTOFILL_HOLD_BASE` | `300` | Milliseconds | Pause duration when auto-fill returns to the baseline. |
+| Constant | Backward Alias | Default Value | Range / Unit | Description |
+| :--- | :--- | :---: | :---: | :--- |
+| `MAX_PLAYER_BARS` | — | `MAX_PLAYER_TEXT_DRAWS / 3` | $1$ – $85$ | Maximum simultaneous progress bars allocated per player. |
+| `PBP_DEFAULT_COLOUR` | `PB_DEFAULT_COLOUR` | `0xE74C3CFF` | RGBA Hex | Default bar color (modern flat red). |
+| `PBP_BORDER_DEFAULT` | `PB_BORDER_DEFAULT` | `1.0` | Float (units) | Default border thickness on side edges. |
+| `PBP_BORDER_MIN` | `PB_BORDER_MIN` | `0.5` | Float (units) | Minimum allowed border thickness. |
+| `PBP_BORDER_MAX` | `PB_BORDER_MAX` | `5.0` | Float (units) | Maximum allowed border thickness. |
+| `PBP_BORDER_Y_RATIO` | `PB_BORDER_Y_RATIO` | `1.25` | Float (ratio) | Vertical border scaling factor to match $16:9$ pixel aspect ratio. |
+| `PBP_MIN_INNER` | `PB_MIN_INNER` | `1.0` | Float (units) | Minimum guaranteed inner fill area preserved inside borders. |
+| `PBP_BLINK_DEFAULT` | `PB_BLINK_DEFAULT` | `250` | Milliseconds | Default toggle interval for blinking bars. |
+| `PBP_BLINK_MIN` | `PB_BLINK_MIN` | `50` | Milliseconds | Minimum allowed blink toggle interval. |
+| `PBP_BLINK_MAX` | `PB_BLINK_MAX` | `60000` | Milliseconds | Maximum allowed blink toggle interval. |
+| `PBP_RING_SEGMENTS` | `PB_RING_SEGMENTS` | `24` | Segments | Default segment count for `PBP_STYLE_RING`. |
+| `PBP_RING_SEGMENT_SCALE` | `PB_RING_SEGMENT_SCALE` | `1.0` | Float (scale) | Default relative size multiplier for ring segment dots. |
+| `PBP_RING_MIN` | `PB_RING_MIN` | `4` | Segments | Minimum allowed segment count for rings. |
+| `PBP_RING_MAX` | `PB_RING_MAX` | `60` | Segments | Maximum allowed segment count for rings. |
+| `PBP_AUTOFILL_TICK` | `PB_AUTOFILL_TICK` | `50` | Milliseconds | Timer tick rate for smooth auto-fill animations. |
+| `PBP_AUTOFILL_RISE` | `PB_AUTOFILL_RISE` | `1000` | Milliseconds | Duration of the auto-fill upward rising phase. |
+| `PBP_AUTOFILL_HOLD_TOP` | `PB_AUTOFILL_HOLD_TOP` | `400` | Milliseconds | Pause duration when auto-fill reaches the peak. |
+| `PBP_AUTOFILL_FALL` | `PB_AUTOFILL_FALL` | `1000` | Milliseconds | Duration of the auto-fill downward falling phase. |
+| `PBP_AUTOFILL_HOLD_BASE` | `PB_AUTOFILL_HOLD_BASE` | `300` | Milliseconds | Pause duration when auto-fill returns to the baseline. |
 
 ---
 
@@ -121,22 +194,20 @@ You can override any of the following definitions before including `<ProgressBar
 
 #### `BarDirection`
 Determines the fill direction for linear bars and the angular rotation direction for segmented rings:
-| Constant | Value | Description |
-| :--- | :---: | :--- |
-| `PB_DIR_RIGHT` | `0` | Fills from left to right (linear) or clockwise from 12 o'clock (ring). |
-| `PB_DIR_LEFT` | `1` | Fills from right to left (linear) or counter-clockwise (ring). |
-| `PB_DIR_UP` | `2` | Fills from bottom to top (linear) or counter-clockwise (ring). |
-| `PB_DIR_DOWN` | `3` | Fills from top to bottom (linear) or clockwise (ring). |
-
-*(Aliases: `BAR_DIRECTION_RIGHT`, `BAR_DIRECTION_LEFT`, `BAR_DIRECTION_UP`, `BAR_DIRECTION_DOWN`)*
+| Constant | Backward Alias | Value | Description |
+| :--- | :--- | :---: | :--- |
+| `PBP_DIR_RIGHT` | `PB_DIR_RIGHT` / `BAR_DIRECTION_RIGHT` | `0` | Fills from left to right (linear) or clockwise from 12 o'clock (ring). |
+| `PBP_DIR_LEFT` | `PB_DIR_LEFT` / `BAR_DIRECTION_LEFT` | `1` | Fills from right to left (linear) or counter-clockwise (ring). |
+| `PBP_DIR_UP` | `PB_DIR_UP` / `BAR_DIRECTION_UP` | `2` | Fills from bottom to top (linear) or counter-clockwise (ring). |
+| `PBP_DIR_DOWN` | `PB_DIR_DOWN` / `BAR_DIRECTION_DOWN` | `3` | Fills from top to bottom (linear) or clockwise (ring). |
 
 #### `ProgressBarStyle`
 Specifies the geometric rendering style of the progress bar:
-| Constant | Value | Description |
-| :--- | :---: | :--- |
-| `PB_STYLE_BAR` | `0` | Standard rectangular bar using sprite `LD_SPAC:white`. |
-| `PB_STYLE_RING` | `1` | Segmented radial ring composed of circular dots (`LD_BEAT:chit`). |
-| `PB_STYLE_CIRCLE` | `2` | Solid circle growing from the geometric center (`LD_BEAT:chit`). |
+| Constant | Backward Alias | Value | Description |
+| :--- | :--- | :---: | :--- |
+| `PBP_STYLE_BAR` | `PB_STYLE_BAR` | `0` | Standard rectangular bar using sprite `LD_SPAC:white`. |
+| `PBP_STYLE_RING` | `PB_STYLE_RING` | `1` | Segmented radial ring composed of circular dots (`LD_BEAT:chit`). |
+| `PBP_STYLE_CIRCLE` | `PB_STYLE_CIRCLE` | `2` | Solid circle growing from the geometric center (`LD_BEAT:chit`). |
 
 #### Special Return Values
 | Constant | Value | Description |
@@ -339,10 +410,10 @@ Sets or gets the border color (RGBA). Passing `0` sets the border to semi-transp
 #### 7. Dynamic Auto-Fill Animations
 
 ```pawn
-stock AutoFillPlayerProgressBar(playerid, barid, Float:maxvalue = 0.0);
+stock AutoFillPlayerProgressBar(playerid, barid, Float:maxvalue = -1.0);
 ```
 Starts a smooth pulsating preview animation that rises from the bar's current value up to `maxvalue`, holds, recedes back down, holds, and repeats continuously.
-* **`maxvalue`:** Peak animation threshold. Passing `0.0` or omitting it defaults to the bar's maximum value.
+* **`maxvalue`:** Peak animation threshold. Passing a negative value (`-1.0`) or omitting it defaults to the bar's maximum value.
 * The true underlying value remains untouched; calling `SetPlayerProgressBarValue` smoothly adjusts the animation baseline in real time.
 * **Returns:** `1` on success, `0` on failure.
 
@@ -535,6 +606,20 @@ This calculation is handled internally so developers only need to specify desire
 
 <details>
 <summary>Show the version history</summary>
+
+### 2.0.0 — 01/11/2026
+* Introduced **Progress Bar Plus - Editor** (`Progress Bar Plus - Editor/filterscripts/FS_ProgressBarEditor.pwn` & `gamemodes/GM_ProgressBarEditor.pwn`):
+  * Complete in-game visual HUD editor built with `Pawn.CMD`, compatible out-of-the-box with SA-MP and open.mp, accompanied by a lightweight sandbox test gamemode.
+  * Memory-optimized 10-slot concurrent Session Pool architecture with automatic in-memory **Project Lock** protection preventing concurrent overwrites across active editors.
+  * Interactive 11-button Editor Dock (Bottom / Top / Minimized fullscreen preview) with live telemetry HUD, project save state indicator (`[Saved]` / `[Unsaved]`), and alignment crosshair/thirds grid.
+  * Multi-bar workspace supporting up to 20 layers per project with Z-order reordering, cloning, renaming, visibility toggling, and 1-step snapshot Undo.
+  * Real-time `35ms` transform engine supporting Keyboard (`W/A/S/D` & Arrows) with `SHIFT`/`CTRL` fast and `ALT` fine speed modifiers, grid snapping, and $16:9$ perfect circle aspect-ratio locking for rings and circles with precise 1:1 screen synchronization.
+  * Clean, single-line in-game notifications formatted within the standard 144-character chat buffer.
+  * Organized `scriptfiles/Progress Bars/` workspace hierarchy (`Projects/`, `Templates/`, `Imports/`, `Exports/`) with starter showcase project and 5 reusable `.pbt` templates.
+  * Universal Import Hub (`.pbp` open/merge, `.pwn`/`.inc`/`.txt` `CreatePlayerProgressBar` source parser, and direct in-game code paste) and 3-format Code Exporter (`.pwn`, `.inc`, `_raw.txt`).
+* Upgraded library configuration macros and enumerations to modern `PBP_` prefix standard (`PBP_DEFAULT_COLOUR`, `PBP_DIR_*`, `PBP_STYLE_*`, etc.) while retaining 100% backward compatibility via legacy `PB_` aliases.
+* Updated `PB_Sprite` in `ProgressBar.inc` with `const sprite[]` const-correctness to eliminate `warning 239` on modern Pawn (`3.10.11 -Z+`) while remaining 100% warning-free on legacy SA-MP `pawncc 3.2.3664`.
+* Added automatic `#tryinclude <open.mp>` header detection fallback in `ProgressBar.inc`.
 
 ### 1.0.0 — 01/11/2026
 * Initial release of **Progress Bar Plus**:

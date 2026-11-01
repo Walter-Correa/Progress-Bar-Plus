@@ -1,0 +1,28 @@
+{
+  "name": "Progress Bar Plus - Editor",
+  "max_players": 10,
+  "announce": false,
+  "enable_query": true,
+  "network":
+  {
+    "port": 7777,
+    "bind": ""
+  },
+  "pawn":
+  {
+    "main_scripts": ["GM_ProgressBarEditor 1"],
+    "side_scripts": ["filterscripts/FS_ProgressBarEditor"],
+    "legacy_plugins": []
+  },
+  "rcon":
+  {
+    "enable": false,
+    "password": "4czqtvlfi2xerhpi"
+  },
+  "game":
+  {
+    "use_entry_exit_markers": false,
+    "use_player_ped_anims": true,
+    "use_all_animations": true
+  }
+}

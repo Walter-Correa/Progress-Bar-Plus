@@ -1,0 +1,23 @@
+; Progress Bar Plus - Bar Template (.pbt)
+[Template]
+Name=CriticalFuelBar
+Style=0
+PosX=548.0000
+PosY=104.0000
+Width=60.5000
+Height=8.0000
+Color=0xEF4444FF
+MaxValue=100.0000
+Value=20.0000
+Direction=0
+BorderSize=1.0000
+BorderColor=0x000000FF
+Segments=24
+SegmentScale=1.0000
+AutoFill=0
+AutoFillMax=-1.0000
+Blinking=1
+BlinkInterval=250
+BlinkDuration=0
+BlinkColor=0xFACC15FF
+BlinkBorderColor=0xEF4444FF

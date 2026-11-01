@@ -1,0 +1,23 @@
+; Progress Bar Plus - Bar Template (.pbt)
+[Template]
+Name=CooldownCircle
+Style=2
+PosX=300.0000
+PosY=199.0000
+Width=40.0000
+Height=50.0000
+Color=0x8B5CF6FF
+MaxValue=100.0000
+Value=65.0000
+Direction=0
+BorderSize=1.0000
+BorderColor=0x0F172AE6
+Segments=24
+SegmentScale=1.0000
+AutoFill=1
+AutoFillMax=100.0000
+Blinking=0
+BlinkInterval=250
+BlinkDuration=0
+BlinkColor=0x00000000
+BlinkBorderColor=0x00000000

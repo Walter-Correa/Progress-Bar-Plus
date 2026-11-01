@@ -1,0 +1,23 @@
+; Progress Bar Plus - Bar Template (.pbt)
+[Template]
+Name=HealthBar
+Style=0
+PosX=548.0000
+PosY=68.0000
+Width=60.5000
+Height=8.0000
+Color=0xB4191DFF
+MaxValue=100.0000
+Value=85.0000
+Direction=0
+BorderSize=1.2000
+BorderColor=0x000000FF
+Segments=24
+SegmentScale=1.0000
+AutoFill=0
+AutoFillMax=-1.0000
+Blinking=0
+BlinkInterval=250
+BlinkDuration=0
+BlinkColor=0x00000000
+BlinkBorderColor=0x00000000

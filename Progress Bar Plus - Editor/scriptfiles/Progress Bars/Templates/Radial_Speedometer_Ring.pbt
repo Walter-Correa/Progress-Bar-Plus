@@ -1,0 +1,23 @@
+; Progress Bar Plus - Bar Template (.pbt)
+[Template]
+Name=SpeedoRing
+Style=1
+PosX=530.0000
+PosY=310.0000
+Width=68.0000
+Height=85.0000
+Color=0xF59E0BFF
+MaxValue=240.0000
+Value=160.0000
+Direction=0
+BorderSize=0.8000
+BorderColor=0x0F172AE6
+Segments=24
+SegmentScale=1.0000
+AutoFill=0
+AutoFillMax=-1.0000
+Blinking=0
+BlinkInterval=250
+BlinkDuration=0
+BlinkColor=0x00000000
+BlinkBorderColor=0x00000000
