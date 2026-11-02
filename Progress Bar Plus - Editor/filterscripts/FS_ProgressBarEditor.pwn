@@ -5,12 +5,12 @@
     generation suite for SA-MP and open.mp.
 
     Author:      Walter Corrêa
-    Version:     2.0.0
+    Version:     2.1.0
     Repository:  https://github.com/Walter-Correa/Progress-Bar-Plus
     License:     Mozilla Public License 2.0 (MPL-2.0)
 
     Dependencies:
-    - Progress Bar Plus (ProgressBar.inc v2.0.0+)
+    - Progress Bar Plus (ProgressBar.inc v2.1.0+)
     - Pawn.CMD by urShadow (https://github.com/urShadow/Pawn.CMD)
 ================================================================================
 */
@@ -63,7 +63,7 @@
 	#define PBE_RCON_ONLY (0)
 #endif
 
-#define PBE_VERSION          "2.0.0"
+#define PBE_VERSION          "2.1.0"
 #define PBE_INVALID_SESSION  (-1)
 #define PBE_MAX_NAME         (32)
 #define PBE_MAX_PROJECT_NAME (40)
@@ -187,6 +187,16 @@ enum
 	PBE_DLG_EXACT_POS_INPUT,
 	PBE_DLG_EXACT_SIZE_INPUT,
 
+	PBE_DLG_LABEL_MENU,
+	PBE_DLG_LABEL_PRESETS,
+	PBE_DLG_LABEL_TEXT_INP,
+	PBE_DLG_LABEL_COLOR_PAL,
+	PBE_DLG_LABEL_COLOR_HEX,
+	PBE_DLG_LABEL_FONT_PICK,
+	PBE_DLG_LABEL_ALIGN_PICK,
+	PBE_DLG_LABEL_SCALE_INP,
+	PBE_DLG_LABEL_OFFSET_INP,
+
 	PBE_DLG_COLOR_MENU,
 	PBE_DLG_MAIN_PALETTE,
 	PBE_DLG_MAIN_HEX_INPUT,
@@ -199,6 +209,7 @@ enum
 	PBE_DLG_VALUE_PRESETS,
 	PBE_DLG_VALUE_EXACT,
 	PBE_DLG_MAX_VALUE_INPUT,
+	PBE_DLG_MIN_VALUE_INPUT,
 	PBE_DLG_AUTOFILL_INPUT,
 	PBE_DLG_BLINK_MENU,
 	PBE_DLG_BLINK_TIMING,
@@ -326,6 +337,7 @@ enum E_PBE_BAR
 	Float:EBar_W,
 	Float:EBar_H,
 	EBar_Color,
+	Float:EBar_Min,
 	Float:EBar_Max,
 	Float:EBar_Val,
 	EBar_Dir,
@@ -340,7 +352,22 @@ enum E_PBE_BAR
 	EBar_BlinkInterval,
 	EBar_BlinkDuration,
 	EBar_BlinkColor,
-	EBar_BlinkBorderColor
+	EBar_BlinkBorderColor,
+	bool:EBar_LabelShow,
+	bool:EBar_LabelAutoScale,
+	EBar_LabelText[32],
+	EBar_LabelColor,
+	EBar_LabelFont,
+	EBar_LabelAlign,
+	Float:EBar_LabelScaleX,
+	Float:EBar_LabelScaleY,
+	Float:EBar_LabelOffsetX,
+	Float:EBar_LabelOffsetY,
+	bool:EBar_Gradient,
+	bool:EBar_GradInvert,
+	EBar_GradEmpty,
+	EBar_GradMid,
+	EBar_GradFull
 };
 
 enum E_PBE_SESSION
@@ -1125,7 +1152,32 @@ static stock bool:PBE_SpawnSlotHandle(playerid, sid, slot)
 	}
 
 	EditorBars[sid][slot][EBar_Handle] = handle;
+	if (EditorBars[sid][slot][EBar_Min] != 0.0)
+	{
+		SetPlayerProgressBarMinValue(playerid, handle, EditorBars[sid][slot][EBar_Min]);
+	}
 	SetPlayerProgressBarValue(playerid, handle, EditorBars[sid][slot][EBar_Val]);
+	if (EditorBars[sid][slot][EBar_Gradient])
+	{
+		SetPlayerProgressBarGradient(playerid, handle, true, EditorBars[sid][slot][EBar_GradEmpty], EditorBars[sid][slot][EBar_GradFull], EditorBars[sid][slot][EBar_GradMid], EditorBars[sid][slot][EBar_GradInvert]);
+	}
+	if (EditorBars[sid][slot][EBar_LabelShow])
+	{
+		SetPlayerProgressBarLabel(
+			playerid,
+			handle,
+			true,
+			EditorBars[sid][slot][EBar_LabelText],
+			EditorBars[sid][slot][EBar_LabelColor],
+			EditorBars[sid][slot][EBar_LabelAlign],
+			EditorBars[sid][slot][EBar_LabelFont],
+			EditorBars[sid][slot][EBar_LabelScaleX],
+			EditorBars[sid][slot][EBar_LabelScaleY],
+			EditorBars[sid][slot][EBar_LabelOffsetX],
+			EditorBars[sid][slot][EBar_LabelOffsetY]
+		);
+		SetPlayerProgressBarLabelAutoScale(playerid, handle, EditorBars[sid][slot][EBar_LabelAutoScale]);
+	}
 
 	if (EditorBars[sid][slot][EBar_Visible]) ShowPlayerProgressBar(playerid, handle);
 	else HidePlayerProgressBar(playerid, handle);
@@ -1297,6 +1349,7 @@ static stock PBE_AddNewBar(playerid, sid, style = PB_STYLE_BAR)
 		EditorBars[sid][slot][EBar_Border]       = PB_BORDER_DEFAULT;
 	}
 
+	EditorBars[sid][slot][EBar_Min]              = 0.0;
 	EditorBars[sid][slot][EBar_Max]              = 100.0;
 	EditorBars[sid][slot][EBar_Val]              = 70.0;
 	EditorBars[sid][slot][EBar_Dir]              = PB_DIR_RIGHT;
@@ -1311,6 +1364,21 @@ static stock PBE_AddNewBar(playerid, sid, style = PB_STYLE_BAR)
 	EditorBars[sid][slot][EBar_BlinkDuration]    = 0;
 	EditorBars[sid][slot][EBar_BlinkColor]       = 0;
 	EditorBars[sid][slot][EBar_BlinkBorderColor] = 0;
+	EditorBars[sid][slot][EBar_LabelShow]        = false;
+	EditorBars[sid][slot][EBar_LabelAutoScale]   = true;
+	format(EditorBars[sid][slot][EBar_LabelText], 32, "{PERCENT}%%");
+	EditorBars[sid][slot][EBar_LabelColor]       = 0xFFFFFFFF;
+	EditorBars[sid][slot][EBar_LabelFont]        = 1;
+	EditorBars[sid][slot][EBar_LabelAlign]       = 2;
+	EditorBars[sid][slot][EBar_LabelScaleX]      = 0.0;
+	EditorBars[sid][slot][EBar_LabelScaleY]      = 0.0;
+	EditorBars[sid][slot][EBar_LabelOffsetX]     = 0.0;
+	EditorBars[sid][slot][EBar_LabelOffsetY]     = 0.0;
+	EditorBars[sid][slot][EBar_Gradient]         = false;
+	EditorBars[sid][slot][EBar_GradInvert]       = false;
+	EditorBars[sid][slot][EBar_GradEmpty]        = 0xE74C3CFF;
+	EditorBars[sid][slot][EBar_GradMid]          = 0xF1C40FFF;
+	EditorBars[sid][slot][EBar_GradFull]         = 0x2ECC71FF;
 
 	EditorSession[sid][EP_BarCount]++;
 	EditorSession[sid][EP_Selected] = slot;
@@ -1773,6 +1841,38 @@ static stock PBE_WriteBarKVBlock(File:fp, sid, slot)
 	fwrite(fp, line);
 	format(line, sizeof line, "BlinkColor=%s\r\nBlinkBorderColor=%s\r\n", hexBlCol, hexBlBCol);
 	fwrite(fp, line);
+	format(line, sizeof line, "MinValue=%.4f\r\n", EditorBars[sid][slot][EBar_Min]);
+	fwrite(fp, line);
+	if (EditorBars[sid][slot][EBar_LabelShow])
+	{
+		new hexLblCol[16];
+		PBE_FormatHex(EditorBars[sid][slot][EBar_LabelColor], hexLblCol);
+		format(line, sizeof line, "LabelShow=1\r\nLabelText=%s\r\nLabelColor=%s\r\nLabelFont=%d\r\nLabelAlign=%d\r\n",
+			EditorBars[sid][slot][EBar_LabelText],
+			hexLblCol,
+			EditorBars[sid][slot][EBar_LabelFont],
+			EditorBars[sid][slot][EBar_LabelAlign]
+		);
+		fwrite(fp, line);
+		format(line, sizeof line, "LabelScaleX=%.4f\r\nLabelScaleY=%.4f\r\nLabelOffsetX=%.4f\r\nLabelOffsetY=%.4f\r\nLabelAutoScale=%d\r\n",
+			EditorBars[sid][slot][EBar_LabelScaleX],
+			EditorBars[sid][slot][EBar_LabelScaleY],
+			EditorBars[sid][slot][EBar_LabelOffsetX],
+			EditorBars[sid][slot][EBar_LabelOffsetY],
+			EditorBars[sid][slot][EBar_LabelAutoScale] ? 1 : 0
+		);
+		fwrite(fp, line);
+	}
+	if (EditorBars[sid][slot][EBar_Gradient])
+	{
+		new hexGE[16], hexGM[16], hexGF[16];
+		PBE_FormatHex(EditorBars[sid][slot][EBar_GradEmpty], hexGE);
+		PBE_FormatHex(EditorBars[sid][slot][EBar_GradMid], hexGM);
+		PBE_FormatHex(EditorBars[sid][slot][EBar_GradFull], hexGF);
+		format(line, sizeof line, "Gradient=1\r\nGradInvert=%d\r\nGradEmpty=%s\r\nGradMid=%s\r\nGradFull=%s\r\n",
+			EditorBars[sid][slot][EBar_GradInvert] ? 1 : 0, hexGE, hexGM, hexGF);
+		fwrite(fp, line);
+	}
 }
 
 static stock PBE_InitDefaultBarStruct(bar[E_PBE_BAR])
@@ -1799,8 +1899,24 @@ static stock PBE_InitDefaultBarStruct(bar[E_PBE_BAR])
 	bar[EBar_Blinking]         = false;
 	bar[EBar_BlinkInterval]    = PB_BLINK_DEFAULT;
 	bar[EBar_BlinkDuration]    = 0;
+	bar[EBar_Min]              = 0.0;
 	bar[EBar_BlinkColor]       = 0;
 	bar[EBar_BlinkBorderColor] = 0;
+	bar[EBar_LabelShow]        = false;
+	bar[EBar_LabelAutoScale]   = true;
+	format(bar[EBar_LabelText], 32, "{PERCENT}%%");
+	bar[EBar_LabelColor]       = 0xFFFFFFFF;
+	bar[EBar_LabelFont]        = 1;
+	bar[EBar_LabelAlign]       = 2;
+	bar[EBar_LabelScaleX]      = 0.0;
+	bar[EBar_LabelScaleY]      = 0.0;
+	bar[EBar_LabelOffsetX]     = 0.0;
+	bar[EBar_LabelOffsetY]     = 0.0;
+	bar[EBar_Gradient]         = false;
+	bar[EBar_GradInvert]       = false;
+	bar[EBar_GradEmpty]        = 0xE74C3CFF;
+	bar[EBar_GradMid]          = 0xF1C40FFF;
+	bar[EBar_GradFull]         = 0x2ECC71FF;
 }
 
 static stock PBE_ApplyKVToBarStruct(bar[E_PBE_BAR], const key[], const val[])
@@ -1817,10 +1933,39 @@ static stock PBE_ApplyKVToBarStruct(bar[E_PBE_BAR], const key[], const val[])
 		if (PBE_ParseHexColor(val, parsedCol)) bar[EBar_Color] = parsedCol;
 		else bar[EBar_Color] = strval(val);
 	}
+	else if (!strcmp(key, "MinValue", true)) bar[EBar_Min] = floatstr(val);
 	else if (!strcmp(key, "MaxValue", true))
 	{
 		bar[EBar_Max] = floatstr(val);
 		if (bar[EBar_Max] <= 0.0) bar[EBar_Max] = 100.0;
+	}
+	else if (!strcmp(key, "LabelShow", true)) bar[EBar_LabelShow] = (strval(val) != 0);
+	else if (!strcmp(key, "LabelText", true)) format(bar[EBar_LabelText], 32, "%s", val);
+	else if (!strcmp(key, "LabelColor", true))
+	{
+		if (PBE_ParseHexColor(val, parsedCol)) bar[EBar_LabelColor] = parsedCol;
+		else bar[EBar_LabelColor] = strval(val);
+	}
+	else if (!strcmp(key, "LabelFont", true)) bar[EBar_LabelFont] = strval(val);
+	else if (!strcmp(key, "LabelAlign", true)) bar[EBar_LabelAlign] = strval(val);
+	else if (!strcmp(key, "LabelScaleX", true)) bar[EBar_LabelScaleX] = floatstr(val);
+	else if (!strcmp(key, "LabelScaleY", true)) bar[EBar_LabelScaleY] = floatstr(val);
+	else if (!strcmp(key, "LabelOffsetX", true)) bar[EBar_LabelOffsetX] = floatstr(val);
+	else if (!strcmp(key, "LabelOffsetY", true)) bar[EBar_LabelOffsetY] = floatstr(val);
+	else if (!strcmp(key, "LabelAutoScale", true)) bar[EBar_LabelAutoScale] = (strval(val) != 0);
+	else if (!strcmp(key, "Gradient", true)) bar[EBar_Gradient] = (strval(val) != 0);
+	else if (!strcmp(key, "GradInvert", true)) bar[EBar_GradInvert] = (strval(val) != 0);
+	else if (!strcmp(key, "GradEmpty", true))
+	{
+		if (PBE_ParseHexColor(val, parsedCol)) bar[EBar_GradEmpty] = parsedCol;
+	}
+	else if (!strcmp(key, "GradMid", true))
+	{
+		if (PBE_ParseHexColor(val, parsedCol)) bar[EBar_GradMid] = parsedCol;
+	}
+	else if (!strcmp(key, "GradFull", true))
+	{
+		if (PBE_ParseHexColor(val, parsedCol)) bar[EBar_GradFull] = parsedCol;
 	}
 	else if (!strcmp(key, "Value", true)) bar[EBar_Val] = floatstr(val);
 	else if (!strcmp(key, "Direction", true)) bar[EBar_Dir] = strval(val);
@@ -1869,7 +2014,7 @@ static stock bool:PBE_SaveProjectFile(playerid, sid, const projName[])
 	new line[256];
 	fwrite(fp, "; ============================================================================\r\n");
 	fwrite(fp, "; Progress Bar Plus - Editor Project File (.pbp)\r\n");
-	fwrite(fp, "; Format Version: 2.0.0\r\n");
+	fwrite(fp, "; Format Version: 2.1.0\r\n");
 	fwrite(fp, "; ============================================================================\r\n\r\n");
 
 	fwrite(fp, "[Project]\r\n");
@@ -2359,7 +2504,7 @@ static stock bool:PBE_ExportProjectCode(sid, const outName[], formatType, outPat
 
 	fwrite(fp, "/*\r\n");
 	fwrite(fp, "================================================================================\r\n");
-	fwrite(fp, "    Generated by Progress Bar Plus - Editor v2.0.0\r\n");
+	fwrite(fp, "    Generated by Progress Bar Plus - Editor v2.1.0\r\n");
 	format(s_OutLine, sizeof s_OutLine, "    Project:     %s\r\n    Total Bars:  %d\r\n", cleanName, count);
 	fwrite(fp, s_OutLine);
 	fwrite(fp, "    Repository:  https://github.com/Walter-Correa/Progress-Bar-Plus\r\n");
@@ -2404,8 +2549,30 @@ static stock bool:PBE_ExportProjectCode(sid, const outName[], formatType, outPat
 				EditorBars[sid][i][EBar_Segments], EditorBars[sid][i][EBar_SegScale]
 			);
 			fwrite(fp, s_OutLine);
+			if (EditorBars[sid][i][EBar_Min] != 0.0)
+			{
+				format(s_OutLine, sizeof s_OutLine, "SetPlayerProgressBarMinValue(playerid, %s[playerid], %.2f);\r\n", EditorBars[sid][i][EBar_Name], EditorBars[sid][i][EBar_Min]);
+				fwrite(fp, s_OutLine);
+			}
 			format(s_OutLine, sizeof s_OutLine, "SetPlayerProgressBarValue(playerid, %s[playerid], %.2f);\r\n", EditorBars[sid][i][EBar_Name], EditorBars[sid][i][EBar_Val]);
 			fwrite(fp, s_OutLine);
+			if (EditorBars[sid][i][EBar_LabelShow])
+			{
+				new hexLblCol[16];
+				PBE_FormatHex(EditorBars[sid][i][EBar_LabelColor], hexLblCol);
+				format(s_OutLine, sizeof s_OutLine, "SetPlayerProgressBarLabel(playerid, %s[playerid], true, \"%s\", %s, %d, %d, %.2f, %.2f, %.2f, %.2f);\r\n",
+					EditorBars[sid][i][EBar_Name],
+					EditorBars[sid][i][EBar_LabelText],
+					hexLblCol,
+					EditorBars[sid][i][EBar_LabelAlign],
+					EditorBars[sid][i][EBar_LabelFont],
+					EditorBars[sid][i][EBar_LabelScaleX],
+					EditorBars[sid][i][EBar_LabelScaleY],
+					EditorBars[sid][i][EBar_LabelOffsetX],
+					EditorBars[sid][i][EBar_LabelOffsetY]
+				);
+				fwrite(fp, s_OutLine);
+			}
 			if (EditorBars[sid][i][EBar_Visible])
 			{
 				format(s_OutLine, sizeof s_OutLine, "ShowPlayerProgressBar(playerid, %s[playerid]);\r\n\r\n", EditorBars[sid][i][EBar_Name]);
@@ -2437,12 +2604,50 @@ static stock bool:PBE_ExportProjectCode(sid, const outName[], formatType, outPat
 		);
 		fwrite(fp, s_OutLine);
 
+		if (EditorBars[sid][i][EBar_Min] != 0.0)
+		{
+			format(s_OutLine, sizeof s_OutLine, "\tSetPlayerProgressBarMinValue(playerid, %s[playerid], %.2f);\r\n", EditorBars[sid][i][EBar_Name], EditorBars[sid][i][EBar_Min]);
+			fwrite(fp, s_OutLine);
+		}
 		format(s_OutLine, sizeof s_OutLine, "\tSetPlayerProgressBarValue(playerid, %s[playerid], %.2f);\r\n", EditorBars[sid][i][EBar_Name], EditorBars[sid][i][EBar_Val]);
 		fwrite(fp, s_OutLine);
+		if (EditorBars[sid][i][EBar_LabelShow])
+		{
+			new hexLblCol[16];
+			PBE_FormatHex(EditorBars[sid][i][EBar_LabelColor], hexLblCol);
+			format(s_OutLine, sizeof s_OutLine, "\tSetPlayerProgressBarLabel(playerid, %s[playerid], true, \"%s\", %s, %d, %d, %.2f, %.2f, %.2f, %.2f);\r\n",
+				EditorBars[sid][i][EBar_Name],
+				EditorBars[sid][i][EBar_LabelText],
+				hexLblCol,
+				EditorBars[sid][i][EBar_LabelAlign],
+				EditorBars[sid][i][EBar_LabelFont],
+				EditorBars[sid][i][EBar_LabelScaleX],
+				EditorBars[sid][i][EBar_LabelScaleY],
+				EditorBars[sid][i][EBar_LabelOffsetX],
+				EditorBars[sid][i][EBar_LabelOffsetY]
+			);
+			fwrite(fp, s_OutLine);
+		}
 
 		if (EditorBars[sid][i][EBar_Visible])
 		{
 			format(s_OutLine, sizeof s_OutLine, "\tShowPlayerProgressBar(playerid, %s[playerid]);\r\n", EditorBars[sid][i][EBar_Name]);
+			fwrite(fp, s_OutLine);
+		}
+		if (EditorBars[sid][i][EBar_Gradient])
+		{
+			new hexGE[16], hexGM[16], hexGF[16];
+			PBE_FormatHex(EditorBars[sid][i][EBar_GradEmpty], hexGE);
+			PBE_FormatHex(EditorBars[sid][i][EBar_GradMid], hexGM);
+			PBE_FormatHex(EditorBars[sid][i][EBar_GradFull], hexGF);
+			if (EditorBars[sid][i][EBar_GradInvert])
+			{
+				format(s_OutLine, sizeof s_OutLine, "\tSetPlayerProgressBarGradient(playerid, %s[playerid], true, %s, %s, %s, true);\r\n", EditorBars[sid][i][EBar_Name], hexGE, hexGF, hexGM);
+			}
+			else
+			{
+				format(s_OutLine, sizeof s_OutLine, "\tSetPlayerProgressBarGradient(playerid, %s[playerid], true, %s, %s, %s);\r\n", EditorBars[sid][i][EBar_Name], hexGE, hexGF, hexGM);
+			}
 			fwrite(fp, s_OutLine);
 		}
 		if (EditorBars[sid][i][EBar_AutoFill])
@@ -2802,10 +3007,90 @@ static stock PBE_OpenStyleMenu(playerid, sid)
 	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Exact Screen Coordinates (X, Y)\t{94A3B8}%.2f, %.2f\n", EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
-	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Exact Dimensions (Width, Height)\t{94A3B8}%.2f x %.2f", EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
+	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Exact Dimensions (Width, Height)\t{94A3B8}%.2f x %.2f\n", EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	new lblTag[64];
+	if (EditorBars[sid][s][EBar_LabelShow]) format(lblTag, sizeof lblTag, "{10B981}ON {FFFFFF}(\"%s\")", EditorBars[sid][s][EBar_LabelText]);
+	else format(lblTag, sizeof lblTag, "{EF4444}OFF");
+	format(s_DlgRow, sizeof s_DlgRow, "{38BDF8}HUD Value / Text Label\t%s", lblTag);
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
 	PBE_ShowDialog(playerid, PBE_DLG_STYLE_MENU, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}PB Editor {FFFFFF}- Style & Geometry Inspector", s_DlgBody, "Edit", "Close");
+}
+
+static stock PBE_SyncLabel(playerid, sid, slot)
+{
+	new h = EditorBars[sid][slot][EBar_Handle];
+	if (!IsValidPlayerProgressBar(playerid, h)) return;
+	SetPlayerProgressBarLabel(
+		playerid,
+		h,
+		EditorBars[sid][slot][EBar_LabelShow],
+		EditorBars[sid][slot][EBar_LabelText],
+		EditorBars[sid][slot][EBar_LabelColor],
+		EditorBars[sid][slot][EBar_LabelAlign],
+		EditorBars[sid][slot][EBar_LabelFont],
+		EditorBars[sid][slot][EBar_LabelScaleX],
+		EditorBars[sid][slot][EBar_LabelScaleY],
+		EditorBars[sid][slot][EBar_LabelOffsetX],
+		EditorBars[sid][slot][EBar_LabelOffsetY]
+	);
+	SetPlayerProgressBarLabelAutoScale(playerid, h, EditorBars[sid][slot][EBar_LabelAutoScale]);
+}
+
+static stock PBE_OpenLabelMenu(playerid, sid)
+{
+	if (!PBE_HasActiveBar(sid)) return;
+	new s = EditorSession[sid][EP_Selected];
+
+	new enTag[24];
+	PBE_OnOffTag(EditorBars[sid][s][EBar_LabelShow], enTag);
+
+	new hexCol[16], rgbTag[16];
+	PBE_FormatHex(EditorBars[sid][s][EBar_LabelColor], hexCol);
+	PBE_FormatRGBTag(EditorBars[sid][s][EBar_LabelColor], rgbTag);
+
+	new alignName[16];
+	if (EditorBars[sid][s][EBar_LabelAlign] == 1) format(alignName, sizeof alignName, "Left (1)");
+	else if (EditorBars[sid][s][EBar_LabelAlign] == 3) format(alignName, sizeof alignName, "Right (3)");
+	else format(alignName, sizeof alignName, "Center (2)");
+
+	s_DlgBody[0] = '\0';
+	strcat(s_DlgBody, "Label Property\tCurrent Setting\n", sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{38BDF8}Toggle Value / Text Label\t%s\n", enTag);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{10B981}Format Template / Text\t{FFFFFF}\"%s\"\n", EditorBars[sid][s][EBar_LabelText]);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	strcat(s_DlgBody, "{38BDF8}Quick Template Presets\t{94A3B8}{PERCENT}%, {VAL}/{MAX}, HP, etc.\n", sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Text Color (Palette / Hex)\t%s|||| {FFFFFF}%s\n", rgbTag, hexCol);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Font Style\t{94A3B8}Font %d\n", EditorBars[sid][s][EBar_LabelFont]);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Horizontal Alignment\t{94A3B8}%s\n", alignName);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	new fitTag[24], scaleDesc[48];
+	PBE_OnOffTag(EditorBars[sid][s][EBar_LabelAutoScale], fitTag);
+	if (EditorBars[sid][s][EBar_LabelAutoScale]) format(scaleDesc, sizeof scaleDesc, "{10B981}Auto-Fit to Bar");
+	else format(scaleDesc, sizeof scaleDesc, "Manual (%.2f x %.2f)", EditorBars[sid][s][EBar_LabelScaleX], EditorBars[sid][s][EBar_LabelScaleY]);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{10B981}Auto-Fit Font Size to Bar Bounds\t%s\n", fitTag);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Manual Letter Size (Scale X, Y)\t{94A3B8}%s\n", scaleDesc);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Position Offset (X, Y)\t{94A3B8}%.2f, %.2f", EditorBars[sid][s][EBar_LabelOffsetX], EditorBars[sid][s][EBar_LabelOffsetY]);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	PBE_ShowDialog(playerid, PBE_DLG_LABEL_MENU, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}PB Editor {FFFFFF}- HUD Value / Text Label", s_DlgBody, "Select", "Back");
 }
 
 static stock PBE_OpenSwatchPalette(playerid, dialogid, const title[], bool:includeAutoZero)
@@ -2876,7 +3161,23 @@ static stock PBE_OpenColorMenu(playerid, sid)
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
 	strcat(s_DlgBody, "{F59E0B}Border Color - Custom Hex RGBA\t{94A3B8}Enter 0xRRGGBBAA or 0 for Auto\n", sizeof s_DlgBody);
-	strcat(s_DlgBody, "{10B981}Copy Theme from Another Layer\t{94A3B8}Clone main & border colors + border size", sizeof s_DlgBody);
+	strcat(s_DlgBody, "{10B981}Copy Theme from Another Layer\t{94A3B8}Clone main & border colors + border size\n", sizeof s_DlgBody);
+
+	new gradTag[24], dirTag[64];
+	PBE_OnOffTag(EditorBars[sid][s][EBar_Gradient], gradTag);
+	if (EditorBars[sid][s][EBar_GradInvert])
+	{
+		format(dirTag, sizeof dirTag, "{EF4444}Inverted {94A3B8}(Low=Green -> High=Red)");
+	}
+	else
+	{
+		format(dirTag, sizeof dirTag, "{10B981}Standard {94A3B8}(Low=Red -> High=Green)");
+	}
+	format(s_DlgRow, sizeof s_DlgRow, "{10B981}Dynamic Health Gradient\t%s\n", gradTag);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{38BDF8}Gradient Direction / Polarity\t%s", dirTag);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
 	PBE_ShowDialog(playerid, PBE_DLG_COLOR_MENU, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}PB Editor {FFFFFF}- Color & Theme Designer", s_DlgBody, "Select", "Close");
 }
@@ -2912,14 +3213,19 @@ static stock PBE_OpenAnimateMenu(playerid, sid)
 	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Set Maximum Value Capacity\t{94A3B8}%.2f\n", EditorBars[sid][s][EBar_Max]);
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
+	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Set Minimum Value Floor\t{94A3B8}%.2f\n", EditorBars[sid][s][EBar_Min]);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
 	format(s_DlgRow, sizeof s_DlgRow, "{F59E0B}Toggle Auto-Fill Ping-Pong\t%s\n", afTag);
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
 	format(s_DlgRow, sizeof s_DlgRow, "{F59E0B}Set Auto-Fill Ceiling\t{FFFFFF}%s\n", afMaxDesc);
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
-	format(s_DlgRow, sizeof s_DlgRow, "{EF4444}Blink & Alert Effect Designer\t%s {94A3B8}(%dms)", blTag, EditorBars[sid][s][EBar_BlinkInterval]);
+	format(s_DlgRow, sizeof s_DlgRow, "{EF4444}Blink & Alert Effect Designer\t%s {94A3B8}(%dms)\n", blTag, EditorBars[sid][s][EBar_BlinkInterval]);
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	strcat(s_DlgBody, "{38BDF8}Smooth Value Lerp Preview (600ms)\t{94A3B8}Test smooth sliding value transition", sizeof s_DlgBody);
 
 	PBE_ShowDialog(playerid, PBE_DLG_ANIMATE_MENU, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}PB Editor {FFFFFF}- Value, Auto-Fill & Blink", s_DlgBody, "Select", "Close");
 }
@@ -3130,7 +3436,7 @@ static stock PBE_OpenViewMenu(playerid, sid)
 static stock PBE_OpenHelpGuide(playerid)
 {
 	s_DlgBody[0] = '\0';
-	strcat(s_DlgBody, "{38BDF8}Progress Bar Plus - Editor v2.0.0\n", sizeof s_DlgBody);
+	strcat(s_DlgBody, "{38BDF8}Progress Bar Plus - Editor v2.1.0\n", sizeof s_DlgBody);
 	strcat(s_DlgBody, "{94A3B8}----------------------------------------------------------------------\n\n", sizeof s_DlgBody);
 
 	strcat(s_DlgBody, "{10B981}1. Interactive Editor Cursor & Free-Walk Mode\n", sizeof s_DlgBody);
@@ -3290,7 +3596,7 @@ static stock bool:PBE_OpenEditorSession(playerid)
 	PBE_RenderEditorDock(playerid, sid);
 	PBE_SetCursor(playerid, sid, true);
 
-	PBE_SendMsg(playerid, PBE_CHAT_OK, "{10B981}Editor Ready: ", "Welcome to {38BDF8}Progress Bar Plus - Editor v2.0.0{FFFFFF}!");
+	PBE_SendMsg(playerid, PBE_CHAT_OK, "{10B981}Editor Ready: ", "Welcome to {38BDF8}Progress Bar Plus - Editor v2.1.0{FFFFFF}!");
 	PBE_SendMsg(playerid, PBE_CHAT_INFO, "", "Use {38BDF8}+ CREATE{FFFFFF} to add, {38BDF8}PROJECT{FFFFFF} to open/save, or {F59E0B}ESC / Y{FFFFFF} for cursor.");
 	return true;
 }
@@ -3363,7 +3669,7 @@ public OnFilterScriptInit()
 	PBE_InitGlobalEditorUI();
 
 	print("======================================================================");
-	print("  Progress Bar Plus - Editor v2.0.0 loaded!");
+	print("  Progress Bar Plus - Editor v2.1.0 loaded!");
 	print("  Author: Walter Correa | Commands: /pbeditor (/pbe), /pbhelp");
 	print("  Workspace Directory: scriptfiles/Progress Bars/");
 	print("  Repository: https://github.com/Walter-Correa/Progress-Bar-Plus");
@@ -3382,7 +3688,7 @@ public OnFilterScriptExit()
 		}
 	}
 	PBE_DestroyGlobalEditorUI();
-	print("  Progress Bar Plus - Editor v2.0.0 unloaded.");
+	print("  Progress Bar Plus - Editor v2.1.0 unloaded.");
 	return 1;
 }
 
@@ -4274,6 +4580,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter exact {38BDF8}Width, Height{FFFFFF} separated by a comma or space\n(Current: {10B981}%.2f, %.2f{FFFFFF}):", EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
 					PBE_ShowDialog(playerid, PBE_DLG_EXACT_SIZE_INPUT, DIALOG_STYLE_INPUT, "{38BDF8}Exact Dimensions (Width, Height)", s_DlgBody, "Apply", "Back");
 				}
+				case 8: PBE_OpenLabelMenu(playerid, sid);
 			}
 			return 1;
 		}
@@ -4465,6 +4772,214 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			return 1;
 		}
 
+		case PBE_DLG_LABEL_MENU:
+		{
+			if (!response || !PBE_HasActiveBar(sid))
+			{
+				PBE_OpenStyleMenu(playerid, sid);
+				return 1;
+			}
+			new s = EditorSession[sid][EP_Selected];
+			switch (listitem)
+			{
+				case 0:
+				{
+					EditorBars[sid][s][EBar_LabelShow] = !EditorBars[sid][s][EBar_LabelShow];
+					EditorSession[sid][EP_Dirty] = true;
+					PBE_SyncLabel(playerid, sid, s);
+					PBE_OpenLabelMenu(playerid, sid);
+				}
+				case 1:
+				{
+					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter custom template or text for this label:\n(Tokens: {38BDF8}{PERCENT}{FFFFFF}, {38BDF8}{VAL}{FFFFFF}, {38BDF8}{MAX}{FFFFFF}, {38BDF8}{MIN}{FFFFFF})\nCurrent: {10B981}%s", EditorBars[sid][s][EBar_LabelText]);
+					PBE_ShowDialog(playerid, PBE_DLG_LABEL_TEXT_INP, DIALOG_STYLE_INPUT, "{38BDF8}Label Text / Template", s_DlgBody, "Apply", "Back");
+				}
+				case 2:
+				{
+					s_DlgBody[0] = '\0';
+					strcat(s_DlgBody, "Preset Name\tTemplate String\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "{38BDF8}Percentage Only\t{FFFFFF}{PERCENT}%\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "{38BDF8}Fraction (Current / Max)\t{FFFFFF}{VAL} / {MAX}\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "{38BDF8}Value Only\t{FFFFFF}{VAL}\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "{10B981}Health Gauge\t{FFFFFF}HP: {PERCENT}%\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "{F59E0B}Armour Gauge\t{FFFFFF}ARM: {PERCENT}%\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "{EC4899}Range (Min to Max)\t{FFFFFF}{MIN} - {MAX}", sizeof s_DlgBody);
+					PBE_ShowDialog(playerid, PBE_DLG_LABEL_PRESETS, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}Quick Template Presets", s_DlgBody, "Apply", "Back");
+				}
+				case 3: PBE_OpenSwatchPalette(playerid, PBE_DLG_LABEL_COLOR_PAL, "{38BDF8}Select Label Text Color", false);
+				case 4:
+				{
+					s_DlgBody[0] = '\0';
+					strcat(s_DlgBody, "Font Style\tPreview\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "Font 0\tClassic fixed monospace\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "Font 1\tStandard slim GTA font (Recommended)\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "Font 2\tHeadline all-caps bold font\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "Font 3\tStoryline / retro serif font", sizeof s_DlgBody);
+					PBE_ShowDialog(playerid, PBE_DLG_LABEL_FONT_PICK, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}Select Font Style", s_DlgBody, "Apply", "Back");
+				}
+				case 5:
+				{
+					s_DlgBody[0] = '\0';
+					strcat(s_DlgBody, "Alignment\tDescription\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "Center (2)\tCentered inside progress bar\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "Left (1)\tAligned to left border edge\n", sizeof s_DlgBody);
+					strcat(s_DlgBody, "Right (3)\tAligned to right border edge", sizeof s_DlgBody);
+					PBE_ShowDialog(playerid, PBE_DLG_LABEL_ALIGN_PICK, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}Select Text Alignment", s_DlgBody, "Apply", "Back");
+				}
+				case 6:
+				{
+					EditorBars[sid][s][EBar_LabelAutoScale] = !EditorBars[sid][s][EBar_LabelAutoScale];
+					if (EditorBars[sid][s][EBar_LabelAutoScale])
+					{
+						EditorBars[sid][s][EBar_LabelScaleX] = 0.0;
+						EditorBars[sid][s][EBar_LabelScaleY] = 0.0;
+					}
+					EditorSession[sid][EP_Dirty] = true;
+					PBE_SyncLabel(playerid, sid, s);
+					PBE_OpenLabelMenu(playerid, sid);
+				}
+				case 7:
+				{
+					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter manual font size {38BDF8}ScaleX, ScaleY{FFFFFF} (disables Auto-Fit):\n(Current: {38BDF8}%.2f %.2f{FFFFFF})", EditorBars[sid][s][EBar_LabelScaleX], EditorBars[sid][s][EBar_LabelScaleY]);
+					PBE_ShowDialog(playerid, PBE_DLG_LABEL_SCALE_INP, DIALOG_STYLE_INPUT, "{38BDF8}Manual Letter Size", s_DlgBody, "Apply", "Back");
+				}
+				case 8:
+				{
+					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter relative position offset {38BDF8}OffsetX, OffsetY{FFFFFF} in pixels:\n(Default: {10B981}0.0 0.0{FFFFFF}, Current: {38BDF8}%.2f %.2f{FFFFFF})", EditorBars[sid][s][EBar_LabelOffsetX], EditorBars[sid][s][EBar_LabelOffsetY]);
+					PBE_ShowDialog(playerid, PBE_DLG_LABEL_OFFSET_INP, DIALOG_STYLE_INPUT, "{38BDF8}Label Position Offset", s_DlgBody, "Apply", "Back");
+				}
+			}
+			return 1;
+		}
+
+		case PBE_DLG_LABEL_PRESETS:
+		{
+			if (response && PBE_HasActiveBar(sid))
+			{
+				new s = EditorSession[sid][EP_Selected];
+				switch (listitem)
+				{
+					case 0: format(EditorBars[sid][s][EBar_LabelText], 32, "{PERCENT}%%");
+					case 1: format(EditorBars[sid][s][EBar_LabelText], 32, "{VAL} / {MAX}");
+					case 2: format(EditorBars[sid][s][EBar_LabelText], 32, "{VAL}");
+					case 3: format(EditorBars[sid][s][EBar_LabelText], 32, "HP: {PERCENT}%%");
+					case 4: format(EditorBars[sid][s][EBar_LabelText], 32, "ARM: {PERCENT}%%");
+					case 5: format(EditorBars[sid][s][EBar_LabelText], 32, "{MIN} - {MAX}");
+				}
+				EditorBars[sid][s][EBar_LabelShow] = true;
+				EditorSession[sid][EP_Dirty] = true;
+				PBE_SyncLabel(playerid, sid, s);
+			}
+			PBE_OpenLabelMenu(playerid, sid);
+			return 1;
+		}
+
+		case PBE_DLG_LABEL_TEXT_INP:
+		{
+			if (response && PBE_HasActiveBar(sid))
+			{
+				new s = EditorSession[sid][EP_Selected];
+				if (inputtext[0] != '\0')
+				{
+					format(EditorBars[sid][s][EBar_LabelText], 32, "%s", inputtext);
+					EditorBars[sid][s][EBar_LabelShow] = true;
+					EditorSession[sid][EP_Dirty] = true;
+					PBE_SyncLabel(playerid, sid, s);
+				}
+			}
+			PBE_OpenLabelMenu(playerid, sid);
+			return 1;
+		}
+
+		case PBE_DLG_LABEL_COLOR_PAL:
+		{
+			if (response && PBE_HasActiveBar(sid))
+			{
+				new s = EditorSession[sid][EP_Selected];
+				if (0 <= listitem < sizeof(g_PBESwatches))
+				{
+					EditorBars[sid][s][EBar_LabelColor] = g_PBESwatches[listitem][Swatch_RGBA];
+					EditorSession[sid][EP_Dirty] = true;
+					PBE_SyncLabel(playerid, sid, s);
+				}
+			}
+			PBE_OpenLabelMenu(playerid, sid);
+			return 1;
+		}
+
+		case PBE_DLG_LABEL_FONT_PICK:
+		{
+			if (response && PBE_HasActiveBar(sid))
+			{
+				new s = EditorSession[sid][EP_Selected];
+				if (0 <= listitem <= 3)
+				{
+					EditorBars[sid][s][EBar_LabelFont] = listitem;
+					EditorSession[sid][EP_Dirty] = true;
+					PBE_SyncLabel(playerid, sid, s);
+				}
+			}
+			PBE_OpenLabelMenu(playerid, sid);
+			return 1;
+		}
+
+		case PBE_DLG_LABEL_ALIGN_PICK:
+		{
+			if (response && PBE_HasActiveBar(sid))
+			{
+				new s = EditorSession[sid][EP_Selected];
+				if (listitem == 0) EditorBars[sid][s][EBar_LabelAlign] = 2; // Center
+				else if (listitem == 1) EditorBars[sid][s][EBar_LabelAlign] = 1; // Left
+				else if (listitem == 2) EditorBars[sid][s][EBar_LabelAlign] = 3; // Right
+				EditorSession[sid][EP_Dirty] = true;
+				PBE_SyncLabel(playerid, sid, s);
+			}
+			PBE_OpenLabelMenu(playerid, sid);
+			return 1;
+		}
+
+		case PBE_DLG_LABEL_SCALE_INP:
+		{
+			if (response && PBE_HasActiveBar(sid))
+			{
+				new s = EditorSession[sid][EP_Selected];
+				new t1[32], t2[32];
+				if (PBE_SplitTwoTokens(inputtext, t1, sizeof t1, t2, sizeof t2))
+				{
+					new Float:sx = floatstr(t1), Float:sy = floatstr(t2);
+					if (sx > 0.05 && sy > 0.1)
+					{
+						EditorBars[sid][s][EBar_LabelAutoScale] = false;
+						EditorBars[sid][s][EBar_LabelScaleX] = sx;
+						EditorBars[sid][s][EBar_LabelScaleY] = sy;
+						EditorSession[sid][EP_Dirty] = true;
+						PBE_SyncLabel(playerid, sid, s);
+					}
+				}
+			}
+			PBE_OpenLabelMenu(playerid, sid);
+			return 1;
+		}
+
+		case PBE_DLG_LABEL_OFFSET_INP:
+		{
+			if (response && PBE_HasActiveBar(sid))
+			{
+				new s = EditorSession[sid][EP_Selected];
+				new t1[32], t2[32];
+				if (PBE_SplitTwoTokens(inputtext, t1, sizeof t1, t2, sizeof t2))
+				{
+					new Float:ox = floatstr(t1), Float:oy = floatstr(t2);
+					EditorBars[sid][s][EBar_LabelOffsetX] = ox;
+					EditorBars[sid][s][EBar_LabelOffsetY] = oy;
+					EditorSession[sid][EP_Dirty] = true;
+					PBE_SyncLabel(playerid, sid, s);
+				}
+			}
+			PBE_OpenLabelMenu(playerid, sid);
+			return 1;
+		}
+
 		// --------------------------------------------------------------------
 		// Color & Theme Designer
 		// --------------------------------------------------------------------
@@ -4525,6 +5040,31 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 						}
 						PBE_ShowDialog(playerid, PBE_DLG_COPY_STYLE_PICK, DIALOG_STYLE_TABLIST_HEADERS, "{10B981}Copy Visual Theme from Layer", s_DlgBody, "Copy", "Back");
 					}
+				}
+				case 6:
+				{
+					new s = EditorSession[sid][EP_Selected];
+					EditorBars[sid][s][EBar_Gradient] = !EditorBars[sid][s][EBar_Gradient];
+					EditorSession[sid][EP_Dirty] = true;
+					new h = EditorBars[sid][s][EBar_Handle];
+					if (IsValidPlayerProgressBar(playerid, h))
+					{
+						SetPlayerProgressBarGradient(playerid, h, EditorBars[sid][s][EBar_Gradient], EditorBars[sid][s][EBar_GradEmpty], EditorBars[sid][s][EBar_GradFull], EditorBars[sid][s][EBar_GradMid], EditorBars[sid][s][EBar_GradInvert]);
+					}
+					PBE_OpenColorMenu(playerid, sid);
+				}
+				case 7:
+				{
+					new s = EditorSession[sid][EP_Selected];
+					EditorBars[sid][s][EBar_GradInvert] = !EditorBars[sid][s][EBar_GradInvert];
+					if (!EditorBars[sid][s][EBar_Gradient]) EditorBars[sid][s][EBar_Gradient] = true;
+					EditorSession[sid][EP_Dirty] = true;
+					new h = EditorBars[sid][s][EBar_Handle];
+					if (IsValidPlayerProgressBar(playerid, h))
+					{
+						SetPlayerProgressBarGradient(playerid, h, true, EditorBars[sid][s][EBar_GradEmpty], EditorBars[sid][s][EBar_GradFull], EditorBars[sid][s][EBar_GradMid], EditorBars[sid][s][EBar_GradInvert]);
+					}
+					PBE_OpenColorMenu(playerid, sid);
 				}
 			}
 			return 1;
@@ -4705,12 +5245,21 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				}
 				case 4:
 				{
+					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter minimum value floor (current: {38BDF8}%.2f{FFFFFF}, Max: %.2f):", EditorBars[sid][s][EBar_Min], EditorBars[sid][s][EBar_Max]);
+					PBE_ShowDialog(playerid, PBE_DLG_MIN_VALUE_INPUT, DIALOG_STYLE_INPUT, "{38BDF8}Set Minimum Floor", s_DlgBody, "Apply", "Back");
+				}
+				case 5:
+				{
 					EditorBars[sid][s][EBar_AutoFill] = !EditorBars[sid][s][EBar_AutoFill];
 					EditorSession[sid][EP_Dirty] = true;
 					new h = EditorBars[sid][s][EBar_Handle];
 					if (IsValidPlayerProgressBar(playerid, h))
 					{
-						if (EditorBars[sid][s][EBar_AutoFill]) AutoFillPlayerProgressBar(playerid, h, EditorBars[sid][s][EBar_AutoFillMax]);
+						if (EditorBars[sid][s][EBar_AutoFill])
+						{
+							StopPlayerProgressBarInterpolation(playerid, h);
+							AutoFillPlayerProgressBar(playerid, h, EditorBars[sid][s][EBar_AutoFillMax]);
+						}
 						else
 						{
 							StopAutoFillPlayerProgressBar(playerid, h);
@@ -4719,14 +5268,32 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 					}
 					PBE_OpenAnimateMenu(playerid, sid);
 				}
-				case 5:
+				case 6:
 				{
 					PBE_ShowDialog(playerid, PBE_DLG_AUTOFILL_INPUT, DIALOG_STYLE_INPUT,
 						"{F59E0B}Auto-Fill Custom Ceiling",
 						"{FFFFFF}Enter the peak value for Auto-Fill ping-pong animation (enter {38BDF8}-1{FFFFFF} to use full MaxValue):",
 						"Apply", "Back");
 				}
-				case 6: PBE_OpenBlinkMenu(playerid, sid);
+				case 7: PBE_OpenBlinkMenu(playerid, sid);
+				case 8:
+				{
+					new h = EditorBars[sid][s][EBar_Handle];
+					if (IsValidPlayerProgressBar(playerid, h))
+					{
+						if (EditorBars[sid][s][EBar_AutoFill])
+						{
+							EditorBars[sid][s][EBar_AutoFill] = false;
+							StopAutoFillPlayerProgressBar(playerid, h);
+						}
+						new Float:target = (EditorBars[sid][s][EBar_Val] > (EditorBars[sid][s][EBar_Max] * 0.5)) ? EditorBars[sid][s][EBar_Min] : EditorBars[sid][s][EBar_Max];
+						EditorBars[sid][s][EBar_Val] = target;
+						EditorSession[sid][EP_Dirty] = true;
+						InterpolatePlayerProgressBarValue(playerid, h, target, 600);
+						PBE_SendMsg(playerid, PBE_CHAT_OK, "{10B981}Lerp Triggered: ", "Interpolating progress bar value smoothly (600ms).");
+					}
+					PBE_OpenAnimateMenu(playerid, sid);
+				}
 			}
 			return 1;
 		}
@@ -4746,6 +5313,33 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 						SetPlayerProgressBarValue(playerid, EditorBars[sid][s][EBar_Handle], EditorBars[sid][s][EBar_Val]);
 					}
 					PBE_RefreshStatusHUD(playerid, sid);
+				}
+			}
+			PBE_OpenAnimateMenu(playerid, sid);
+			return 1;
+		}
+
+		case PBE_DLG_MIN_VALUE_INPUT:
+		{
+			if (response && PBE_HasActiveBar(sid))
+			{
+				new Float:mv = floatstr(inputtext);
+				new s = EditorSession[sid][EP_Selected];
+				if (mv <= EditorBars[sid][s][EBar_Max])
+				{
+					EditorBars[sid][s][EBar_Min] = mv;
+					if (EditorBars[sid][s][EBar_Val] < mv) EditorBars[sid][s][EBar_Val] = mv;
+					EditorSession[sid][EP_Dirty] = true;
+					if (IsValidPlayerProgressBar(playerid, EditorBars[sid][s][EBar_Handle]))
+					{
+						SetPlayerProgressBarMinValue(playerid, EditorBars[sid][s][EBar_Handle], mv);
+						SetPlayerProgressBarValue(playerid, EditorBars[sid][s][EBar_Handle], EditorBars[sid][s][EBar_Val]);
+					}
+					PBE_RefreshStatusHUD(playerid, sid);
+				}
+				else
+				{
+					PBE_SendMsg(playerid, PBE_CHAT_WARN, "{F59E0B}Invalid Range: ", "Minimum value floor cannot exceed maximum capacity.");
 				}
 			}
 			PBE_OpenAnimateMenu(playerid, sid);
@@ -4805,6 +5399,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				EditorSession[sid][EP_Dirty] = true;
 				if (IsValidPlayerProgressBar(playerid, EditorBars[sid][s][EBar_Handle]))
 				{
+					StopPlayerProgressBarInterpolation(playerid, EditorBars[sid][s][EBar_Handle]);
 					AutoFillPlayerProgressBar(playerid, EditorBars[sid][s][EBar_Handle], EditorBars[sid][s][EBar_AutoFillMax]);
 				}
 			}

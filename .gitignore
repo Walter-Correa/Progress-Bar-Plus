@@ -1,0 +1,10 @@
+# Server runtime logs
+log.txt
+server_log.txt
+*.log
+
+# Editor runtime output
+Progress Bar Plus - Editor/log.txt
+Progress Bar Plus - Editor/server_log.txt
+Progress Bar Plus - Editor/omp-server.log
+Progress Bar Plus - Editor/chatlog.txt

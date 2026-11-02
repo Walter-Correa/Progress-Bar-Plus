@@ -1,0 +1,123 @@
+name: Release
+
+# Builds and packages Progress Bar Plus with the in-game editor, include, and license,
+# and publishes the standalone archive as a GitHub release with the version's changelog.
+# Releases are triggered manually by hand: Actions > Release > Run workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build Release Package
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify & Compile Pawn Scripts
+        shell: pwsh
+        run: |
+          Push-Location "Progress Bar Plus - Editor/pawno"
+          Write-Host "Compiling FS_ProgressBarEditor.pwn..."
+          .\pawncc.exe "..\filterscripts\FS_ProgressBarEditor.pwn" "-D..\filterscripts" "-iinclude" "-;+" "-(+"
+          if ($LASTEXITCODE -ne 0) { throw "FS_ProgressBarEditor.pwn compilation failed with code $LASTEXITCODE" }
+
+          Write-Host "Compiling GM_ProgressBarEditor.pwn..."
+          .\pawncc.exe "..\gamemodes\GM_ProgressBarEditor.pwn" "-D..\gamemodes" "-iinclude" "-;+" "-(+"
+          if ($LASTEXITCODE -ne 0) { throw "GM_ProgressBarEditor.pwn compilation failed with code $LASTEXITCODE" }
+          Pop-Location
+
+      - name: Prepare Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+
+          # Copy Editor directory
+          Copy-Item -Path "Progress Bar Plus - Editor" -Destination "package/Progress Bar Plus - Editor" -Recurse -Force
+
+          # Remove runtime logs or transient files from package
+          Get-ChildItem -Path "package/Progress Bar Plus - Editor" -Include "*.log", "log.txt", "server_log.txt", "omp-server.log", "chatlog.txt" -Recurse | Remove-Item -Force
+
+          # Copy Library Include and License
+          if (Test-Path "ProgressBar.inc") { Copy-Item "ProgressBar.inc" "package/ProgressBar.inc" -Force }
+          if (Test-Path "LICENSE") { Copy-Item "LICENSE" "package/LICENSE" -Force }
+
+      - name: Compress Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path package/* -DestinationPath dist/Progress-Bar-Plus.zip -Force
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Progress-Bar-Plus
+          path: dist/Progress-Bar-Plus.zip
+
+  publish-release:
+    name: Publish Release
+    needs: build-release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read Version
+        id: ver
+        shell: pwsh
+        run: |
+          $m = Select-String -Path ProgressBar.inc -Pattern 'Version:\s+([0-9\.]+)'
+          if (-not $m) { throw "Version not found in ProgressBar.inc" }
+          $v = $m.Matches[0].Groups[1].Value.Trim()
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: Progress-Bar-Plus
+          path: dist
+
+      - name: Extract Release Notes from README.md
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $lines = (Get-Content README.md -Encoding utf8) -replace "`r$", ""
+          $start = -1
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^### $([regex]::Escape($v)) ") { $start = $i; break }
+          }
+          if ($start -lt 0) { throw "No section for version $v in the Version history of README.md" }
+          $body = @()
+          for ($i = $start + 1; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^### " -or $lines[$i] -match "^</details>") { break }
+            $body += $lines[$i]
+          }
+          $body = ($body -join "`n").Trim()
+          if (-not $body) { throw "The section of version $v in README.md is empty" }
+          $notes = $body
+          [System.IO.File]::WriteAllText((Join-Path $PWD "release-notes.md"), $notes, (New-Object System.Text.UTF8Encoding($false)))
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v${{ steps.ver.outputs.version }}"
+          $title = "Progress Bar Plus $tag"
+          $files = @(
+            "dist/Progress-Bar-Plus.zip"
+          )
+          if (gh release view $tag 2>$null) {
+            Write-Host "Updating release $tag..."
+            gh release upload $tag $files --clobber
+            gh release edit $tag --title $title --notes-file release-notes.md
+          } else {
+            Write-Host "Creating new release $tag..."
+            gh release create $tag $files --target $env:GITHUB_SHA --title $title --notes-file release-notes.md
+          }

@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "*"
+      - "*/*"
+      - "**"
+  pull_request:
+    branches:
+      - "*"
+      - "*/*"
+      - "**"
+
+jobs:
+  build-package:
+    name: Build & Package Progress Bar Plus
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify & Compile Pawn Scripts
+        shell: pwsh
+        run: |
+          Push-Location "Progress Bar Plus - Editor/pawno"
+          Write-Host "Compiling FS_ProgressBarEditor.pwn..."
+          .\pawncc.exe "..\filterscripts\FS_ProgressBarEditor.pwn" "-D..\filterscripts" "-iinclude" "-;+" "-(+"
+          if ($LASTEXITCODE -ne 0) { throw "FS_ProgressBarEditor.pwn compilation failed with code $LASTEXITCODE" }
+
+          Write-Host "Compiling GM_ProgressBarEditor.pwn..."
+          .\pawncc.exe "..\gamemodes\GM_ProgressBarEditor.pwn" "-D..\gamemodes" "-iinclude" "-;+" "-(+"
+          if ($LASTEXITCODE -ne 0) { throw "GM_ProgressBarEditor.pwn compilation failed with code $LASTEXITCODE" }
+          Pop-Location
+
+      - name: Prepare Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+
+          # Copy Editor directory
+          Copy-Item -Path "Progress Bar Plus - Editor" -Destination "package/Progress Bar Plus - Editor" -Recurse -Force
+
+          # Remove runtime logs or transient files from package
+          Get-ChildItem -Path "package/Progress Bar Plus - Editor" -Include "*.log", "log.txt", "server_log.txt", "omp-server.log", "chatlog.txt" -Recurse | Remove-Item -Force
+
+          # Copy Library Include and License
+          if (Test-Path "ProgressBar.inc") { Copy-Item "ProgressBar.inc" "package/ProgressBar.inc" -Force }
+          if (Test-Path "LICENSE") { Copy-Item "LICENSE" "package/LICENSE" -Force }
+
+      - name: Compress Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path package/* -DestinationPath dist/Progress-Bar-Plus.zip -Force
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Progress-Bar-Plus
+          path: dist/Progress-Bar-Plus.zip

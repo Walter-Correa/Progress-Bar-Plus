@@ -6,7 +6,7 @@
 
     File:        GM_ProgressBarEditor.pwn
     Author:      Walter Corrêa
-    Version:     2.0.0
+    Version:     2.1.0
     Repository:  https://github.com/Walter-Correa/Progress-Bar-Plus
     License:     Mozilla Public License 2.0 (MPL-2.0)
 
@@ -32,7 +32,7 @@
 ================================================================================
 */
 
-#define GM_VERSION              "2.0.0"
+#define GM_VERSION              "2.1.0"
 #define GM_DLG_SANDBOX_HELP     (28390)
 
 #define GM_DEFAULT_SKIN         (299)
