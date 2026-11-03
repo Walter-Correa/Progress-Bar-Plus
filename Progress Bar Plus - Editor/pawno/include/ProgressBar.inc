@@ -4,7 +4,7 @@
     gauge library for SA-MP and Open.MP.
 
     Author:      Walter Corrêa
-    Version:     2.1.0
+    Version:     2.2.0
     Repository:  https://github.com/Walter-Correa/Progress-Bar-Plus
     License:     Mozilla Public License 2.0 (MPL-2.0)
 ================================================================================
@@ -16,6 +16,11 @@
 #define _progressbar_included
 #define _progressbarplus_included
 
+#define PROGRESSBAR_VERSION_MAJOR             2
+#define PROGRESSBAR_VERSION_MINOR             2
+#define PROGRESSBAR_VERSION_PATCH             0
+#define PROGRESSBAR_VERSION_STRING            "2.2.0"
+
 #if !defined _samp_included && !defined _INC_open_mp
 	#if __Pawn >= 0x030A
 		#tryinclude <open.mp>
@@ -24,6 +29,17 @@
 		#include <a_samp>
 	#endif
 #endif
+
+/*
+    Performance Note: Include Ordering
+    If your script uses TextDraw hooking libraries (such as TextDrawFX or ALS hooks),
+    always include <ProgressBar> BEFORE them:
+        #include <open.mp> // or <a_samp>
+        #include <ProgressBar>
+        #include <TextDrawFX>
+    This guarantees high-frequency bar updates bind directly to raw natives without
+    incurring hook search loop overhead.
+*/
 
 #if !defined PBP_DEFAULT_COLOUR
 	#if defined PB_DEFAULT_COLOUR
@@ -50,6 +66,10 @@
 #if !defined PB_BORDER_DEFAULT
 	#define PB_BORDER_DEFAULT PBP_BORDER_DEFAULT
 #endif
+#if !defined PB_BORDER_NONE
+	#define PB_BORDER_NONE (0.0)
+#endif
+
 
 #if !defined PBP_BORDER_MIN
 	#if defined PB_BORDER_MIN
@@ -128,8 +148,13 @@
 	#define PB_BLINK_MAX PBP_BLINK_MAX
 #endif
 
-#if !defined MAX_PLAYER_BARS
+#if defined PB_MAX_BARS
+	#define MAX_PLAYER_BARS (PB_MAX_BARS)
+#elseif !defined MAX_PLAYER_BARS
 	#define MAX_PLAYER_BARS (_:MAX_PLAYER_TEXT_DRAWS / 3)
+#endif
+#if !defined PB_MAX_BARS
+	#define PB_MAX_BARS MAX_PLAYER_BARS
 #endif
 
 #if !defined PBP_RING_SEGMENTS
@@ -176,6 +201,39 @@
 	#define PB_RING_MAX PBP_RING_MAX
 #endif
 
+#if !defined PBP_RING_SCALE_MIN
+	#if defined PB_RING_SCALE_MIN
+		#define PBP_RING_SCALE_MIN (PB_RING_SCALE_MIN)
+	#else
+		#define PBP_RING_SCALE_MIN (0.10)
+	#endif
+#endif
+#if !defined PB_RING_SCALE_MIN
+	#define PB_RING_SCALE_MIN PBP_RING_SCALE_MIN
+#endif
+
+#if !defined PBP_RING_SCALE_MAX
+	#if defined PB_RING_SCALE_MAX
+		#define PBP_RING_SCALE_MAX (PB_RING_SCALE_MAX)
+	#else
+		#define PBP_RING_SCALE_MAX (3.00)
+	#endif
+#endif
+#if !defined PB_RING_SCALE_MAX
+	#define PB_RING_SCALE_MAX PBP_RING_SCALE_MAX
+#endif
+
+#if !defined PBP_TICK_RATE
+	#if defined PB_TICK_RATE
+		#define PBP_TICK_RATE (PB_TICK_RATE)
+	#else
+		#define PBP_TICK_RATE (33)
+	#endif
+#endif
+#if !defined PB_TICK_RATE
+	#define PB_TICK_RATE PBP_TICK_RATE
+#endif
+
 #if !defined PBP_AUTOFILL_TICK
 	#if defined PB_AUTOFILL_TICK
 		#define PBP_AUTOFILL_TICK (PB_AUTOFILL_TICK)
@@ -217,6 +275,10 @@
 
 #define PBP_CHIT_SCALE (1.5)
 #define PB_CHIT_SCALE PBP_CHIT_SCALE
+#if !defined PlayerBar
+	#define PlayerBar: _:
+#endif
+#define PB_TD_SAFETY_HEADROOM (4)
 
 #define PBP_MAX_TDS (_:MAX_PLAYER_TEXT_DRAWS)
 #define PB_MAX_TDS PBP_MAX_TDS
@@ -290,10 +352,17 @@ enum
 #define PB_STYLE_RING   PBP_STYLE_RING
 #define PB_STYLE_CIRCLE PBP_STYLE_CIRCLE
 
+#define PB_LABEL_ORIENT_AUTO        (0)
+#define PB_LABEL_ORIENT_HORIZONTAL  (1)
+#define PB_LABEL_ORIENT_VERTICAL    (2)
+#define PB_LABEL_ORIENT_HORIZ       PB_LABEL_ORIENT_HORIZONTAL
+#define PB_LABEL_ORIENT_VERT        PB_LABEL_ORIENT_VERTICAL
+
 enum ProgressBar_Data
 {
 	bool:PB_Valid,
 	bool:PB_Visible,
+	bool:PB_Rendered,
 	Float:PB_PosX,
 	Float:PB_PosY,
 	Float:PB_Width,
@@ -323,10 +392,15 @@ enum ProgressBar_Data
 	bool:PB_Empty,
 	bool:PB_LabelEnabled,
 	bool:PB_LabelAutoScale,
+	bool:PB_LabelFollowColour,
+	PB_LabelOrientation,
 	PB_LabelText[32],
 	PB_LabelColour,
+	PB_LabelCurrentColour,
 	PB_LabelFont,
 	PB_LabelAlignment,
+	bool:PB_LabelIsVert,
+	PB_LabelLines,
 	Float:PB_LabelScaleX,
 	Float:PB_LabelScaleY,
 	Float:PB_LabelOffsetX,
@@ -361,9 +435,9 @@ static stock PB_TDColour[MAX_PLAYERS][PB_MAX_TDS];
 
 static stock PlayerText:PB_Sprite(playerid, Float:x, Float:y, Float:width, Float:height, colour, const sprite[] = "LD_SPAC:white")
 {
-	new buf[32];
-	strcat(buf, sprite, sizeof buf);
-	new PlayerText:td = CreatePlayerTextDraw(playerid, x, y, buf);
+	new spriteBuf[32];
+	strcat(spriteBuf, sprite, sizeof spriteBuf);
+	new PlayerText:td = CreatePlayerTextDraw(playerid, x, y, spriteBuf);
 	if (td == PB_NO_TD) return td;
 	PlayerTextDrawFont(playerid, td, PB_SPRITE_FONT);
 	PlayerTextDrawTextSize(playerid, td, width, height);
@@ -381,11 +455,26 @@ static stock PB_Kill(playerid, &PlayerText:td)
 	}
 }
 
+static stock PB_ShapeDimensions(playerid, barid, &Float:x, &Float:y, &Float:width, &Float:height)
+{
+	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_CIRCLE)
+	{
+		new Float:sw = width * PB_CHIT_SCALE, Float:sh = height * PB_CHIT_SCALE;
+		x += (width - sw) / 2.0;
+		y += (height - sh) / 2.0;
+		width = sw;
+		height = sh;
+	}
+}
+
 static stock PlayerText:PB_ShapeSprite(playerid, barid, Float:x, Float:y, Float:width, Float:height, colour)
 {
-	if (ProgressBar[playerid][barid][PB_Style] != PB_STYLE_CIRCLE) return PB_Sprite(playerid, x, y, width, height, colour);
-	new Float:sw = width * PB_CHIT_SCALE, Float:sh = height * PB_CHIT_SCALE;
-	return PB_Sprite(playerid, x + (width - sw) / 2.0, y + (height - sh) / 2.0, sw, sh, colour, "LD_BEAT:chit");
+	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_CIRCLE)
+	{
+		PB_ShapeDimensions(playerid, barid, x, y, width, height);
+		return PB_Sprite(playerid, x, y, width, height, colour, "LD_BEAT:chit");
+	}
+	return PB_Sprite(playerid, x, y, width, height, colour);
 }
 
 static stock PB_ClampSegments(segments)
@@ -410,9 +499,22 @@ static stock PB_KillRing(playerid, barid)
 static stock Float:PB_ClampBorder(Float:border)
 {
 	if (border != border) return PB_BORDER_DEFAULT;
+	if (border <= 0.0) return 0.0;
 	if (border < PB_BORDER_MIN) return PB_BORDER_MIN;
 	if (border > PB_BORDER_MAX) return PB_BORDER_MAX;
 	return border;
+}
+
+static stock Float:PB_CheckLegacyHeight(Float:height, style, direction)
+{
+#if !defined PB_NO_LEGACY_HEIGHT_CONVERT
+	if (height <= 4.5 && style == PB_STYLE_BAR && (direction == PB_DIR_RIGHT || direction == PB_DIR_LEFT))
+	{
+		height = height * 2.5;
+		if (height < 6.0) height = 6.0;
+	}
+#endif
+	return height;
 }
 
 static stock Float:PB_FitBorder(Float:border, Float:width, Float:height)
@@ -442,12 +544,17 @@ static stock Float:PB_DisplayValue(playerid, barid)
 	if (!ProgressBar[playerid][barid][PB_AutoFill]) return value;
 	new Float:target = ProgressBar[playerid][barid][PB_AutoFillMax];
 	new cycle = PB_AUTOFILL_RISE + PB_AUTOFILL_HOLD_TOP + PB_AUTOFILL_FALL + PB_AUTOFILL_HOLD_BASE;
+	if (cycle <= 0) cycle = 1;
 	new t = (GetTickCount() - ProgressBar[playerid][barid][PB_AutoFillStart]) % cycle;
 	if (t < 0) t += cycle;
 	new Float:f;
-	if (t < PB_AUTOFILL_RISE) f = float(t) / float(PB_AUTOFILL_RISE);
-	else if (t < PB_AUTOFILL_RISE + PB_AUTOFILL_HOLD_TOP) f = 1.0;
-	else if (t < PB_AUTOFILL_RISE + PB_AUTOFILL_HOLD_TOP + PB_AUTOFILL_FALL) f = 1.0 - float(t - PB_AUTOFILL_RISE - PB_AUTOFILL_HOLD_TOP) / float(PB_AUTOFILL_FALL);
+	new rise = PB_AUTOFILL_RISE;
+	if (rise <= 0) rise = 1;
+	new fall = PB_AUTOFILL_FALL;
+	if (fall <= 0) fall = 1;
+	if (t < rise) f = float(t) / float(rise);
+	else if (t < rise + PB_AUTOFILL_HOLD_TOP) f = 1.0;
+	else if (t < rise + PB_AUTOFILL_HOLD_TOP + fall) f = 1.0 - float(t - rise - PB_AUTOFILL_HOLD_TOP) / float(fall);
 	else f = 0.0;
 	return value + (target - value) * f;
 }
@@ -610,21 +717,40 @@ static stock PB_ApplyColours(playerid, barid)
 	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_RING)
 	{
 		PB_ApplyRingColours(playerid, barid);
-		return;
 	}
-	if (ProgressBar[playerid][barid][PB_Border] != PB_NO_TD)
+	else
 	{
-		PB_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Border], PB_GetBorderColour(playerid, barid));
-		if (ProgressBar[playerid][barid][PB_Visible]) PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Border]);
+		if (ProgressBar[playerid][barid][PB_Border] != PB_NO_TD)
+		{
+			PB_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Border], PB_GetBorderColour(playerid, barid));
+			if (ProgressBar[playerid][barid][PB_Visible]) PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Border]);
+		}
+		new colour = PB_GetCurrentColour(playerid, barid);
+		if (ProgressBar[playerid][barid][PB_Background] != PB_NO_TD) PB_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Background], PB_BackgroundColour(colour));
+		if (ProgressBar[playerid][barid][PB_Progress] != PB_NO_TD) PB_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Progress], colour);
+		PB_ShowInner(playerid, barid);
 	}
-	new colour = PB_GetCurrentColour(playerid, barid);
-	if (ProgressBar[playerid][barid][PB_Background] != PB_NO_TD) PB_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Background], PB_BackgroundColour(colour));
-	if (ProgressBar[playerid][barid][PB_Progress] != PB_NO_TD) PB_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Progress], colour);
-	PB_ShowInner(playerid, barid);
+	if (ProgressBar[playerid][barid][PB_LabelEnabled] && ProgressBar[playerid][barid][PB_Label] != PB_NO_TD)
+	{
+		if (ProgressBar[playerid][barid][PB_LabelFollowColour])
+		{
+			new col = PB_GetLabelColour(playerid, barid);
+			if (col != ProgressBar[playerid][barid][PB_LabelCurrentColour])
+			{
+				ProgressBar[playerid][barid][PB_LabelCurrentColour] = col;
+				PBP_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Label], col);
+				if (ProgressBar[playerid][barid][PB_Visible])
+				{
+					PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Label]);
+				}
+			}
+		}
+	}
 }
 
 static stock PB_KillAutoFill(playerid, barid)
 {
+	if (!(0 <= playerid < MAX_PLAYERS) || !(0 <= barid < MAX_PLAYER_BARS)) return;
 	if (ProgressBar[playerid][barid][PB_AutoFillTimer] != 0)
 	{
 		KillTimer(ProgressBar[playerid][barid][PB_AutoFillTimer]);
@@ -635,6 +761,7 @@ static stock PB_KillAutoFill(playerid, barid)
 
 static stock PB_KillLerp(playerid, barid)
 {
+	if (!(0 <= playerid < MAX_PLAYERS) || !(0 <= barid < MAX_PLAYER_BARS)) return;
 	if (ProgressBar[playerid][barid][PB_LerpTimer] != 0)
 	{
 		KillTimer(ProgressBar[playerid][barid][PB_LerpTimer]);
@@ -645,6 +772,7 @@ static stock PB_KillLerp(playerid, barid)
 
 static stock PB_KillBlink(playerid, barid)
 {
+	if (!(0 <= playerid < MAX_PLAYERS) || !(0 <= barid < MAX_PLAYER_BARS)) return;
 	if (ProgressBar[playerid][barid][PB_BlinkTimer] != 0)
 	{
 		KillTimer(ProgressBar[playerid][barid][PB_BlinkTimer]);
@@ -654,12 +782,124 @@ static stock PB_KillBlink(playerid, barid)
 	ProgressBar[playerid][barid][PB_BlinkPhase] = false;
 }
 
-static stock PB_RenderMain(playerid, barid)
+static stock s_PB_FreeTDCache[MAX_PLAYERS] = { -1, ... };
+static stock s_PB_FreeTDCacheTick[MAX_PLAYERS] = { 0, ... };
+
+stock PB_InvalidateFreeTDCache(playerid)
+{
+	if (0 <= playerid < MAX_PLAYERS)
+	{
+		s_PB_FreeTDCache[playerid] = -1;
+		s_PB_FreeTDCacheTick[playerid] = 0;
+	}
+}
+
+stock bool:PB_CanAllocatePlayerTextDraws(playerid, count)
+{
+	if (!(0 <= playerid < MAX_PLAYERS) || !IsPlayerConnected(playerid)) return false;
+	if (count <= 0) return true;
+	#if defined _INC_open_mp
+		new freeCount = 0;
+		for (new i = 0; i < _:MAX_PLAYER_TEXT_DRAWS; i++)
+		{
+			if (!IsValidPlayerTextDraw(playerid, PlayerText:i))
+			{
+				if (++freeCount >= count) return true;
+			}
+		}
+		return false;
+	#else
+		new PlayerText:probe[PB_MAX_TDS];
+		new allocCount = 0;
+		new bool:canAlloc = true;
+		while (allocCount < count && allocCount < PB_MAX_TDS)
+		{
+			new PlayerText:td = CreatePlayerTextDraw(playerid, 0.0, 0.0, "_");
+			if (td == PB_NO_TD || !(0 <= _:td < PB_MAX_TDS))
+			{
+				canAlloc = false;
+				break;
+			}
+			probe[allocCount++] = td;
+		}
+		for (new i = 0; i < allocCount; i++)
+		{
+			PlayerTextDrawDestroy(playerid, probe[i]);
+		}
+		return canAlloc;
+	#endif
+}
+
+stock PB_GetFreePlayerTextDraws(playerid)
+{
+	if (!(0 <= playerid < MAX_PLAYERS) || !IsPlayerConnected(playerid)) return 0;
+	#if defined _INC_open_mp
+		new freeCount = 0;
+		for (new i = 0; i < _:MAX_PLAYER_TEXT_DRAWS; i++)
+		{
+			if (!IsValidPlayerTextDraw(playerid, PlayerText:i)) freeCount++;
+		}
+		return freeCount;
+	#else
+		new now = GetTickCount();
+		if (s_PB_FreeTDCache[playerid] != -1 && (now - s_PB_FreeTDCacheTick[playerid]) < 1000)
+		{
+			return s_PB_FreeTDCache[playerid];
+		}
+		new PlayerText:probe[PB_MAX_TDS];
+		new freeCount = 0;
+		while (freeCount < PB_MAX_TDS)
+		{
+			new PlayerText:td = CreatePlayerTextDraw(playerid, 0.0, 0.0, "_");
+			if (td == PB_NO_TD || !(0 <= _:td < PB_MAX_TDS)) break;
+			probe[freeCount++] = td;
+		}
+		for (new i = 0; i < freeCount; i++)
+		{
+			PlayerTextDrawDestroy(playerid, probe[i]);
+		}
+		s_PB_FreeTDCache[playerid] = freeCount;
+		s_PB_FreeTDCacheTick[playerid] = now;
+		return freeCount;
+	#endif
+}
+
+stock PB_GetUsedPlayerTextDraws(playerid)
+{
+	if (!(0 <= playerid < MAX_PLAYERS) || !IsPlayerConnected(playerid)) return 0;
+	#if defined _INC_open_mp
+		new used = 0;
+		for (new i = 0; i < _:MAX_PLAYER_TEXT_DRAWS; i++)
+		{
+			if (IsValidPlayerTextDraw(playerid, PlayerText:i)) used++;
+		}
+		return used;
+	#else
+		return (_:MAX_PLAYER_TEXT_DRAWS - PB_GetFreePlayerTextDraws(playerid));
+	#endif
+}
+
+stock PB_GetBarRequiredTextDraws(style, segments, bool:hasLabel = false)
+{
+	new count = 0;
+	if (style == PB_STYLE_RING)
+	{
+		count = PB_ClampSegments(segments) * 2;
+	}
+	else
+	{
+		count = 3;
+	}
+	if (hasLabel) count++;
+	return count;
+}
+
+static stock bool:PB_RenderMain(playerid, barid)
 {
 	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_RING)
 	{
 		PB_ApplyRingColours(playerid, barid);
-		return;
+		return true;
 	}
 	new Float:x, Float:y, Float:width, Float:height;
 	if (!PB_MainRect(playerid, barid, x, y, width, height))
@@ -672,62 +912,57 @@ static stock PB_RenderMain(playerid, barid)
 		}
 		ProgressBar[playerid][barid][PB_Empty] = true;
 		if (keep != PB_NO_TD) PlayerTextDrawHide(playerid, keep);
-		return;
+		return true;
 	}
 	ProgressBar[playerid][barid][PB_Empty] = false;
+
+	new Float:renderX = x, Float:renderY = y, Float:renderW = width, Float:renderH = height;
+	PB_ShapeDimensions(playerid, barid, renderX, renderY, renderW, renderH);
+
 	new PlayerText:current = ProgressBar[playerid][barid][PB_Progress];
 	if (current != PB_NO_TD)
 	{
 		new bool:moves = ProgressBar[playerid][barid][PB_Style] == PB_STYLE_CIRCLE
 			|| ProgressBar[playerid][barid][PB_Direction] == PB_DIR_LEFT
 			|| ProgressBar[playerid][barid][PB_Direction] == PB_DIR_UP;
-		#if defined PlayerTextDrawSetPos
-			new bool:canMove = true;
-		#else
-			new bool:canMove = false;
-		#endif
-		if (!moves || canMove)
+		if (!moves)
 		{
-			new Float:sw = width, Float:sh = height;
-			if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_CIRCLE)
-			{
-				sw = width * PB_CHIT_SCALE;
-				sh = height * PB_CHIT_SCALE;
-			}
-			PlayerTextDrawTextSize(playerid, current, sw, sh);
-			#if defined PlayerTextDrawSetPos
-				if (moves)
-				{
-					new Float:sx = x, Float:sy = y;
-					if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_CIRCLE)
-					{
-						sx = x + (width - sw) / 2.0;
-						sy = y + (height - sh) / 2.0;
-					}
-					PlayerTextDrawSetPos(playerid, current, sx, sy);
-				}
-			#endif
+			PlayerTextDrawTextSize(playerid, current, renderW, renderH);
 			if (ProgressBar[playerid][barid][PB_Gradient])
 			{
 				PB_TextDrawColour(playerid, current, PB_GetCurrentColour(playerid, barid));
 			}
 			if (ProgressBar[playerid][barid][PB_Visible] && !PB_InnerHidden(playerid, barid)) PlayerTextDrawShow(playerid, current);
-			return;
+			return true;
 		}
-		new PlayerText:fresh = PB_ShapeSprite(playerid, barid, x, y, width, height, PB_GetCurrentColour(playerid, barid));
-		if (fresh == PB_NO_TD)
-		{
+		#if defined PlayerTextDrawSetPos
+			PlayerTextDrawSetPos(playerid, current, renderX, renderY);
+			PlayerTextDrawTextSize(playerid, current, renderW, renderH);
+			if (ProgressBar[playerid][barid][PB_Gradient])
+			{
+				PB_TextDrawColour(playerid, current, PB_GetCurrentColour(playerid, barid));
+			}
+			if (ProgressBar[playerid][barid][PB_Visible] && !PB_InnerHidden(playerid, barid)) PlayerTextDrawShow(playerid, current);
+			return true;
+		#else
 			PB_Kill(playerid, current);
-			fresh = PB_ShapeSprite(playerid, barid, x, y, width, height, PB_GetCurrentColour(playerid, barid));
-		}
-		ProgressBar[playerid][barid][PB_Progress] = fresh;
-		if (ProgressBar[playerid][barid][PB_Visible] && fresh != PB_NO_TD && !PB_InnerHidden(playerid, barid)) PlayerTextDrawShow(playerid, fresh);
-		PB_Kill(playerid, current);
-		return;
+			new PlayerText:fresh = PB_ShapeSprite(playerid, barid, x, y, width, height, PB_GetCurrentColour(playerid, barid));
+			if (fresh == PB_NO_TD) return false;
+			ProgressBar[playerid][barid][PB_Progress] = fresh;
+			if (ProgressBar[playerid][barid][PB_Visible] && !PB_InnerHidden(playerid, barid)) PlayerTextDrawShow(playerid, fresh);
+			new PlayerText:lbl = ProgressBar[playerid][barid][PB_Label];
+			if (lbl != PB_NO_TD && ProgressBar[playerid][barid][PB_LabelEnabled] && _:fresh >= _:lbl)
+			{
+				PB_RenderLabel(playerid, barid);
+			}
+			return true;
+		#endif
 	}
 	new PlayerText:created = PB_ShapeSprite(playerid, barid, x, y, width, height, PB_GetCurrentColour(playerid, barid));
+	if (created == PB_NO_TD) return false;
 	ProgressBar[playerid][barid][PB_Progress] = created;
-	if (ProgressBar[playerid][barid][PB_Visible] && created != PB_NO_TD && !PB_InnerHidden(playerid, barid)) PlayerTextDrawShow(playerid, created);
+	if (ProgressBar[playerid][barid][PB_Visible] && !PB_InnerHidden(playerid, barid)) PlayerTextDrawShow(playerid, created);
+	return true;
 }
 
 static stock bool:PB_RenderRing(playerid, barid)
@@ -761,8 +996,9 @@ static stock bool:PB_RenderRing(playerid, barid)
 			new Float:angle = -90.0 + step * float(i);
 			new Float:ex = cx + px * floatcos(angle, degrees), Float:ey = cy + py * floatsin(angle, degrees);
 			new PlayerText:td = PB_Sprite(playerid, ex - sw / 2.0, ey - sh / 2.0, sw, sh, 0, "LD_BEAT:chit");
-			if (td == PB_NO_TD)
+			if (td == PB_NO_TD || !(0 <= _:td < PB_MAX_TDS))
 			{
+				if (td != PB_NO_TD) PlayerTextDrawDestroy(playerid, td);
 				PB_KillRing(playerid, barid);
 				return false;
 			}
@@ -772,6 +1008,178 @@ static stock bool:PB_RenderRing(playerid, barid)
 	}
 	PB_ApplyRingColours(playerid, barid);
 	return true;
+}
+
+static stock bool:PB_IsLabelVertical(playerid, barid)
+{
+	if (ProgressBar[playerid][barid][PB_Style] != PB_STYLE_BAR) return false;
+
+	if (ProgressBar[playerid][barid][PB_LabelOrientation] == PB_LABEL_ORIENT_HORIZONTAL) return false;
+	if (ProgressBar[playerid][barid][PB_LabelOrientation] == PB_LABEL_ORIENT_VERTICAL) return true;
+
+	new Float:w = ProgressBar[playerid][barid][PB_Width];
+	new Float:h = ProgressBar[playerid][barid][PB_Height];
+
+	// Only vertical bars (height > width) can be candidates for vertical text stacking
+	if (h <= w) return false;
+
+	// Extract text template to measure visible character count
+	new text[32];
+	text[0] = '\0';
+	strcat(text, ProgressBar[playerid][barid][PB_LabelText], sizeof text);
+	if (text[0] == '\0') strcat(text, "{PERCENT}%", sizeof text);
+
+	new visibleLen = 0;
+	new len = strlen(text);
+	for (new i = 0; i < len; )
+	{
+		if (text[i] == '{')
+		{
+			if (!strcmp(text[i], "{PERCENT}", false, 9) || !strcmp(text[i], "{PCT}", false, 5))
+			{
+				visibleLen += 3; // "100" or "70"
+				i += (!strcmp(text[i], "{PCT}", false, 5)) ? 5 : 9;
+				continue;
+			}
+			else if (!strcmp(text[i], "{VALUE}", false, 7) || !strcmp(text[i], "{VAL}", false, 5))
+			{
+				visibleLen += 3; // e.g. "100"
+				i += (!strcmp(text[i], "{VAL}", false, 5)) ? 5 : 7;
+				continue;
+			}
+			else if (!strcmp(text[i], "{MAX}", false, 5) || !strcmp(text[i], "{MIN}", false, 5))
+			{
+				visibleLen += 3;
+				i += 5;
+				continue;
+			}
+			new closeIdx = -1;
+			for (new j = i + 1; j < len && (j - i) <= 10; j++)
+			{
+				if (text[j] == '}') { closeIdx = j; break; }
+			}
+			if (closeIdx != -1)
+			{
+				i = closeIdx + 1;
+				continue;
+			}
+		}
+		visibleLen++;
+		i++;
+	}
+
+	if (visibleLen < 1) visibleLen = 1;
+
+	new Float:border = ProgressBar[playerid][barid][PB_BorderSize];
+
+	// Width required to comfortably fit visibleLen characters horizontally with legible font (scaleX >= 0.16)
+	new Float:neededWidth = float(visibleLen) * 4.2 + (border * 2.0) + 4.0;
+	if (neededWidth < 16.0) neededWidth = 16.0;
+
+	// Height required to comfortably fit visibleLen characters vertically
+	new Float:neededHeight = (float(visibleLen - 1) * 7.5 + 8.0) + (border * 2.0);
+
+	// If bar width is too narrow for horizontal text, AND bar is taller than wide, AND tall enough for vertical:
+	if (w < neededWidth && h >= neededHeight && h > w)
+	{
+		return true; // Not enough horizontal space -> stack vertically
+	}
+	return false; // Width is sufficient or bar is horizontal -> stay horizontal
+}
+
+static stock PB_GetLabelColour(playerid, barid)
+{
+	if (ProgressBar[playerid][barid][PB_LabelFollowColour])
+	{
+		new col = PB_GetCurrentColour(playerid, barid);
+		if ((col & 0xFF) == 0) col |= 0xFF;
+		return col;
+	}
+	return ProgressBar[playerid][barid][PB_LabelColour];
+}
+
+static stock PB_MakeVerticalText(const src[], dest[], maxsize = sizeof dest)
+{
+	dest[0] = '\0';
+	new len = strlen(src);
+	new d = 0;
+	new bool:firstChar = true;
+
+	for (new i = 0; i < len && d < maxsize - 4; )
+	{
+		// Preserve GTA SA color embed tags {RRGGBB} intact
+		if (src[i] == '{')
+		{
+			new closeIdx = -1;
+			for (new j = i + 1; j < len && (j - i) <= 10; j++)
+			{
+				if (src[j] == '}')
+				{
+					closeIdx = j;
+					break;
+				}
+			}
+			if (closeIdx != -1)
+			{
+				for (new k = i; k <= closeIdx && d < maxsize - 1; k++)
+				{
+				dest[d++] = src[k];
+				}
+				dest[d] = '\0';
+				i = closeIdx + 1;
+				continue;
+			}
+		}
+
+		// Skip existing native newlines if already present
+		if (src[i] == '~' && (i + 2 < len) && (src[i + 1] == 'n' || src[i + 1] == 'N') && src[i + 2] == '~')
+		{
+			if (d < maxsize - 4)
+			{
+				dest[d++] = '~'; dest[d++] = 'n'; dest[d++] = '~';
+				dest[d] = '\0';
+			}
+			i += 3;
+			firstChar = true;
+			continue;
+		}
+
+		// Insert ~n~ before subsequent non-space characters
+		if (src[i] != ' ')
+		{
+			if (!firstChar)
+			{
+				if (d < maxsize - 4)
+				{
+					dest[d++] = '~'; dest[d++] = 'n'; dest[d++] = '~';
+				}
+			}
+			firstChar = false;
+		}
+
+		if (d < maxsize - 1)
+		{
+			dest[d++] = src[i];
+			dest[d] = '\0';
+		}
+		i++;
+	}
+	dest[d] = '\0';
+}
+
+static stock PB_CountLabelLines(const text[])
+{
+	new lines = 1;
+	new len = strlen(text);
+	for (new i = 0; i < len - 2; i++)
+	{
+		if (text[i] == '~' && (text[i + 1] == 'n' || text[i + 1] == 'N') && text[i + 2] == '~')
+		{
+			lines++;
+			i += 2;
+		}
+	}
+	return lines;
 }
 
 static stock PB_FormatLabel(playerid, barid, dest[], maxsize = sizeof dest)
@@ -837,8 +1245,19 @@ static stock PB_FormatLabel(playerid, barid, dest[], maxsize = sizeof dest)
 		out[o++] = tmpl[i++];
 	}
 	out[o] = '\0';
-	dest[0] = '\0';
-	strcat(dest, out, maxsize);
+
+	if (PB_IsLabelVertical(playerid, barid))
+	{
+		new vertBuf[96];
+		PB_MakeVerticalText(out, vertBuf, sizeof vertBuf);
+		dest[0] = '\0';
+		strcat(dest, vertBuf, maxsize);
+	}
+	else
+	{
+		dest[0] = '\0';
+		strcat(dest, out, maxsize);
+	}
 }
 
 static stock PB_CalculateLabelScale(playerid, barid, const text[], &Float:scaleX, &Float:scaleY)
@@ -846,35 +1265,112 @@ static stock PB_CalculateLabelScale(playerid, barid, const text[], &Float:scaleX
 	new Float:h = ProgressBar[playerid][barid][PB_Height];
 	new Float:w = ProgressBar[playerid][barid][PB_Width];
 	new style = ProgressBar[playerid][barid][PB_Style];
+	new Float:border = ProgressBar[playerid][barid][PB_BorderSize];
+	new bool:isVert = PB_IsLabelVertical(playerid, barid);
 
 	if (style == PB_STYLE_RING || style == PB_STYLE_CIRCLE)
 	{
 		scaleY = w * 0.024;
 		if (scaleY < 0.20) scaleY = 0.20;
-		if (scaleY > 1.30) scaleY = 1.30;
+		if (scaleY > 1.20) scaleY = 1.20;
 		scaleX = scaleY * 0.26;
+
+		new len = strlen(text);
+		if (len > 0 && w > 8.0)
+		{
+			new Float:approxW = float(len) * (scaleX * 22.0);
+			new Float:maxW = w * 0.65;
+			if (approxW > maxW && approxW > 0.0)
+			{
+				new Float:ratio = maxW / approxW;
+				scaleX *= ratio;
+				scaleY *= ratio;
+				if (scaleX < 0.08) scaleX = 0.08;
+				if (scaleY < 0.18) scaleY = 0.18;
+			}
+		}
+		return;
+	}
+
+	// Linear Bars (PB_STYLE_BAR):
+	if (isVert)
+	{
+		new lines = PB_CountLabelLines(text);
+		if (lines < 1) lines = 1;
+
+		new Float:innerW = w - (border * 2.0);
+		if (innerW < 2.0) innerW = w * 0.75;
+		new Float:availW = innerW * 0.85;
+
+		new Float:innerH = h - (border * 2.0);
+		if (innerH < 4.0) innerH = h * 0.85;
+		new Float:availH = innerH * 0.90;
+
+		// Maximum scaleX allowed by the narrow bar width:
+		// In SA-MP Font 1, the widest character ('%' or wide capital with outline) has width:
+		// approxCharWidth = scaleX * 26.0 + 1.8
+		// For approxCharWidth <= availW:
+		new Float:maxSX_W = (availW > 1.8) ? ((availW - 1.8) / 26.0) : (availW / 30.0);
+		if (maxSX_W < 0.05) maxSX_W = 0.05;
+
+		// Convert to scaleY using standard font aspect ratio (scaleX / scaleY = 0.27):
+		new Float:maxSY_W = maxSX_W / 0.27;
+
+		// Maximum scaleY allowed by total vertical stack height:
+		// In GTA SA Font 1, line advance for ~n~ is ~16.0 * scaleY, plus final glyph ~8.5 * scaleY:
+		new Float:lineFactor = float(lines - 1) * 16.0 + 8.5;
+		if (lineFactor < 8.5) lineFactor = 8.5;
+		new Float:maxSY_H = (availH > 1.5) ? ((availH - 1.5) / lineFactor) : (availH / lineFactor);
+
+		// Take the most constraining dimension so text fits in BOTH width and height:
+		scaleY = (maxSY_W < maxSY_H) ? maxSY_W : maxSY_H;
+		if (scaleY < 0.18) scaleY = 0.18;
+		if (scaleY > 1.10) scaleY = 1.10;
+
+		scaleX = scaleY * 0.27;
+		if (scaleX < 0.05) scaleX = 0.05;
+		if (scaleX > 0.28) scaleX = 0.28;
+		return;
+	}
+
+	// Horizontal text inside Linear Bar (either horizontal bar OR wide vertical bar):
+	new Float:innerH = h - (border * 2.0);
+	if (innerH < 2.0) innerH = h * 0.80;
+	new Float:availH = innerH * 0.82;
+
+	new Float:innerW = w - (border * 2.0);
+	if (innerW < 2.0) innerW = w * 0.85;
+	new Float:availW = innerW * 0.88;
+
+	// If bar is horizontal (w >= h), base scaleY is derived from bar thickness h:
+	// If bar is vertical but wide (h > w), base scaleY is derived from a balanced standard size:
+	if (w >= h)
+	{
+		scaleY = availH * 0.10;
+		if (scaleY < 0.18) scaleY = 0.18;
+		if (scaleY > 1.15) scaleY = 1.15;
 	}
 	else
 	{
-		// Fit strictly inside linear bar boundaries (with outline on border)
-		scaleY = h * 0.075;
+		scaleY = 0.75;
+		if (scaleY * 8.5 > availH) scaleY = availH / 8.5;
 		if (scaleY < 0.18) scaleY = 0.18;
-		if (scaleY > 1.80) scaleY = 1.80;
-		scaleX = scaleY * 0.27;
 	}
 
+	scaleX = scaleY * 0.27;
+
+	// Measure total horizontal string width to ensure it fits strictly inside availW:
 	new len = strlen(text);
-	if (len > 0 && w > 8.0)
+	if (len > 0)
 	{
-		new Float:approxW = float(len) * (scaleX * 18.0);
-		new Float:maxW = (style == PB_STYLE_BAR) ? (w * 0.90) : (w * 0.65);
-		if (approxW > maxW && approxW > 0.0)
+		new Float:approxW = float(len) * (scaleX * 22.0) + (float(len) * 1.5);
+		if (approxW > availW && approxW > 0.0)
 		{
-			new Float:ratio = maxW / approxW;
+			new Float:ratio = availW / approxW;
 			scaleX *= ratio;
 			scaleY *= ratio;
-			if (scaleX < 0.10) scaleX = 0.10;
-			if (scaleY < 0.15) scaleY = 0.15;
+			if (scaleX < 0.06) scaleX = 0.06;
+			if (scaleY < 0.16) scaleY = 0.16;
 		}
 	}
 }
@@ -887,13 +1383,13 @@ static stock PB_RenderLabel(playerid, barid)
 		return;
 	}
 
-	new buf[48];
-	PB_FormatLabel(playerid, barid, buf, sizeof buf);
+	new labelBuf[96];
+	PB_FormatLabel(playerid, barid, labelBuf, sizeof labelBuf);
 
 	new Float:scaleX, Float:scaleY;
 	if (ProgressBar[playerid][barid][PB_LabelAutoScale])
 	{
-		PB_CalculateLabelScale(playerid, barid, buf, scaleX, scaleY);
+		PB_CalculateLabelScale(playerid, barid, labelBuf, scaleX, scaleY);
 		ProgressBar[playerid][barid][PB_LabelScaleX] = scaleX;
 		ProgressBar[playerid][barid][PB_LabelScaleY] = scaleY;
 	}
@@ -913,28 +1409,55 @@ static stock PB_RenderLabel(playerid, barid)
 	new Float:barW = ProgressBar[playerid][barid][PB_Width];
 	new Float:barH = ProgressBar[playerid][barid][PB_Height];
 
-	// Accurate vertical glyph centering:
-	new Float:glyphHeight = scaleY * 9.0;
-	new Float:y = barY + ((barH - glyphHeight) / 2.0) + ProgressBar[playerid][barid][PB_LabelOffsetY];
-	new Float:x;
+	new bool:isVert = PB_IsLabelVertical(playerid, barid);
+	ProgressBar[playerid][barid][PB_LabelIsVert] = isVert;
+	ProgressBar[playerid][barid][PB_LabelLines] = PB_CountLabelLines(labelBuf);
+	new Float:x, Float:y;
 
-	if (align == 1) // Left
+	if (isVert)
 	{
-		x = barX + 3.0 + ProgressBar[playerid][barid][PB_LabelOffsetX];
+		new lines = ProgressBar[playerid][barid][PB_LabelLines];
+		if (lines < 1) lines = 1;
+		new Float:blockHeight = (float(lines - 1) * 16.0 + 8.5) * scaleY;
+		y = barY + ((barH - blockHeight) / 2.0) + ProgressBar[playerid][barid][PB_LabelOffsetY];
+
+		if (align == 1) // Left
+		{
+			x = barX + 1.5 + ProgressBar[playerid][barid][PB_LabelOffsetX];
+		}
+		else if (align == 3) // Right
+		{
+			x = barX + barW - 1.5 + ProgressBar[playerid][barid][PB_LabelOffsetX];
+		}
+		else // Center
+		{
+			x = barX + (barW / 2.0) + ProgressBar[playerid][barid][PB_LabelOffsetX];
+		}
 	}
-	else if (align == 3) // Right
+	else
 	{
-		x = barX + barW - 3.0 + ProgressBar[playerid][barid][PB_LabelOffsetX];
-	}
-	else // Center
-	{
-		x = barX + (barW / 2.0) + ProgressBar[playerid][barid][PB_LabelOffsetX];
+		// Accurate vertical glyph centering:
+		new Float:glyphHeight = scaleY * 8.5;
+		y = barY + ((barH - glyphHeight) / 2.0) + ProgressBar[playerid][barid][PB_LabelOffsetY];
+
+		if (align == 1) // Left
+		{
+			x = barX + 2.5 + ProgressBar[playerid][barid][PB_LabelOffsetX];
+		}
+		else if (align == 3) // Right
+		{
+			x = barX + barW - 2.5 + ProgressBar[playerid][barid][PB_LabelOffsetX];
+		}
+		else // Center
+		{
+			x = barX + (barW / 2.0) + ProgressBar[playerid][barid][PB_LabelOffsetX];
+		}
 	}
 
 	// Always destroy and recreate PB_Label so client immediately adopts font, size & alignment
 	PB_Kill(playerid, ProgressBar[playerid][barid][PB_Label]);
 
-	new PlayerText:td = CreatePlayerTextDraw(playerid, x, y, buf);
+	new PlayerText:td = CreatePlayerTextDraw(playerid, x, y, labelBuf);
 	if (td == PB_NO_TD) return;
 
 	ProgressBar[playerid][barid][PB_Label] = td;
@@ -946,7 +1469,9 @@ static stock PB_RenderLabel(playerid, barid)
 	PlayerTextDrawFont(playerid, td, ProgressBar[playerid][barid][PB_LabelFont]);
 	#endif
 	PlayerTextDrawLetterSize(playerid, td, scaleX, scaleY);
-	PBP_TextDrawColour(playerid, td, ProgressBar[playerid][barid][PB_LabelColour]);
+	new col = PB_GetLabelColour(playerid, barid);
+	ProgressBar[playerid][barid][PB_LabelCurrentColour] = col;
+	PBP_TextDrawColour(playerid, td, col);
 	PlayerTextDrawSetShadow(playerid, td, 0);
 	PlayerTextDrawSetOutline(playerid, td, 1);
 	PBP_TextDrawBackgroundColour(playerid, td, 0x000000AA);
@@ -966,31 +1491,68 @@ static stock PB_UpdateLabelText(playerid, barid)
 		PB_RenderLabel(playerid, barid);
 		return;
 	}
-	new buf[48];
-	PB_FormatLabel(playerid, barid, buf, sizeof buf);
-	PlayerTextDrawSetString(playerid, td, buf);
+	new labelBuf[96];
+	PB_FormatLabel(playerid, barid, labelBuf, sizeof labelBuf);
+
+	new bool:isVert = PB_IsLabelVertical(playerid, barid);
+	if (isVert != ProgressBar[playerid][barid][PB_LabelIsVert])
+	{
+		PB_RenderLabel(playerid, barid);
+		return;
+	}
+	if (isVert)
+	{
+		new lines = PB_CountLabelLines(labelBuf);
+		if (lines != ProgressBar[playerid][barid][PB_LabelLines])
+		{
+			PB_RenderLabel(playerid, barid);
+			return;
+		}
+	}
+
+	PlayerTextDrawSetString(playerid, td, labelBuf);
+	if (ProgressBar[playerid][barid][PB_LabelFollowColour])
+	{
+		new col = PB_GetLabelColour(playerid, barid);
+		if (col != ProgressBar[playerid][barid][PB_LabelCurrentColour])
+		{
+			ProgressBar[playerid][barid][PB_LabelCurrentColour] = col;
+			PBP_TextDrawColour(playerid, td, col);
+			if (ProgressBar[playerid][barid][PB_Visible])
+			{
+				PlayerTextDrawShow(playerid, td);
+			}
+		}
+	}
 }
 
 static stock bool:PB_Render(playerid, barid)
 {
+	ProgressBar[playerid][barid][PB_Rendered] = false;
 	PB_Kill(playerid, ProgressBar[playerid][barid][PB_Border]);
 	PB_Kill(playerid, ProgressBar[playerid][barid][PB_Background]);
 	PB_Kill(playerid, ProgressBar[playerid][barid][PB_Progress]);
 	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_RING)
 	{
 		new bool:ok = PB_RenderRing(playerid, barid);
+		if (!ok) return false;
 		PB_RenderLabel(playerid, barid);
-		return ok;
+		ProgressBar[playerid][barid][PB_Rendered] = true;
+		return true;
 	}
 	PB_KillRing(playerid, barid);
 	new Float:x, Float:y, Float:width, Float:height;
 	ProgressBar[playerid][barid][PB_Border] = PB_ShapeSprite(playerid, barid, ProgressBar[playerid][barid][PB_PosX], ProgressBar[playerid][barid][PB_PosY],
 		ProgressBar[playerid][barid][PB_Width], ProgressBar[playerid][barid][PB_Height], PB_GetBorderColour(playerid, barid));
+	if (ProgressBar[playerid][barid][PB_Border] == PB_NO_TD)
+	{
+		return false;
+	}
 	PB_Inner(playerid, barid, x, y, width, height);
 	ProgressBar[playerid][barid][PB_Background] = PB_ShapeSprite(playerid, barid, x, y, width, height, PB_BackgroundColour(PB_GetCurrentColour(playerid, barid)));
-	if (ProgressBar[playerid][barid][PB_Border] == PB_NO_TD || ProgressBar[playerid][barid][PB_Background] == PB_NO_TD)
+	if (ProgressBar[playerid][barid][PB_Background] == PB_NO_TD)
 	{
-		PB_RenderLabel(playerid, barid);
+		PB_Kill(playerid, ProgressBar[playerid][barid][PB_Border]);
 		return false;
 	}
 	if (ProgressBar[playerid][barid][PB_Visible])
@@ -998,8 +1560,15 @@ static stock bool:PB_Render(playerid, barid)
 		PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Border]);
 		if (!PB_InnerHidden(playerid, barid)) PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Background]);
 	}
-	PB_RenderMain(playerid, barid);
+	new bool:mainOk = PB_RenderMain(playerid, barid);
+	if (!mainOk)
+	{
+		PB_Kill(playerid, ProgressBar[playerid][barid][PB_Background]);
+		PB_Kill(playerid, ProgressBar[playerid][barid][PB_Border]);
+		return false;
+	}
 	PB_RenderLabel(playerid, barid);
+	ProgressBar[playerid][barid][PB_Rendered] = true;
 	return true;
 }
 
@@ -1017,6 +1586,17 @@ stock bool:IsValidPlayerProgressBar(playerid, barid)
 stock CreatePlayerProgressBar(playerid, Float:x, Float:y, Float:width = 60.0, Float:height = 8.0, colour = PB_DEFAULT_COLOUR, Float:max = 100.0, direction = PB_DIR_RIGHT, Float:border = PB_BORDER_DEFAULT, bordercolour = 0, style = PB_STYLE_BAR, segments = PB_RING_SEGMENTS, Float:segmentscale = PB_RING_SEGMENT_SCALE)
 {
 	if (!(0 <= playerid < MAX_PLAYERS) || !IsPlayerConnected(playerid)) return INVALID_PLAYER_BAR_ID;
+
+	height = PB_CheckLegacyHeight(height, style, direction);
+	if (segmentscale < PB_RING_SCALE_MIN) segmentscale = PB_RING_SCALE_MIN;
+	else if (segmentscale > PB_RING_SCALE_MAX) segmentscale = PB_RING_SCALE_MAX;
+
+	new needed = PB_GetBarRequiredTextDraws(style, segments, false);
+	if (!PB_CanAllocatePlayerTextDraws(playerid, needed + PB_TD_SAFETY_HEADROOM))
+	{
+		return INVALID_PLAYER_BAR_ID;
+	}
+
 	new barid = INVALID_PLAYER_BAR_ID;
 	for (new i = 0; i < MAX_PLAYER_BARS; i++)
 	{
@@ -1029,6 +1609,7 @@ stock CreatePlayerProgressBar(playerid, Float:x, Float:y, Float:width = 60.0, Fl
 	if (barid == INVALID_PLAYER_BAR_ID) return INVALID_PLAYER_BAR_ID;
 	ProgressBar[playerid][barid][PB_Valid] = true;
 	ProgressBar[playerid][barid][PB_Visible] = false;
+	ProgressBar[playerid][barid][PB_Rendered] = false;
 	ProgressBar[playerid][barid][PB_PosX] = x;
 	ProgressBar[playerid][barid][PB_PosY] = y;
 	ProgressBar[playerid][barid][PB_Width] = width;
@@ -1057,11 +1638,15 @@ stock CreatePlayerProgressBar(playerid, Float:x, Float:y, Float:width = 60.0, Fl
 	ProgressBar[playerid][barid][PB_Empty] = false;
 	ProgressBar[playerid][barid][PB_LabelEnabled] = false;
 	ProgressBar[playerid][barid][PB_LabelAutoScale] = true;
+	ProgressBar[playerid][barid][PB_LabelFollowColour] = false;
+	ProgressBar[playerid][barid][PB_LabelOrientation] = PB_LABEL_ORIENT_AUTO;
 	ProgressBar[playerid][barid][PB_LabelText][0] = '\0';
 	strcat(ProgressBar[playerid][barid][PB_LabelText], "{PERCENT}%", 32);
 	ProgressBar[playerid][barid][PB_LabelColour] = 0xFFFFFFFF;
 	ProgressBar[playerid][barid][PB_LabelFont] = 1;
 	ProgressBar[playerid][barid][PB_LabelAlignment] = 2;
+	ProgressBar[playerid][barid][PB_LabelIsVert] = false;
+	ProgressBar[playerid][barid][PB_LabelLines] = 0;
 	ProgressBar[playerid][barid][PB_LabelScaleX] = 0.0;
 	ProgressBar[playerid][barid][PB_LabelScaleY] = 0.0;
 	ProgressBar[playerid][barid][PB_LabelOffsetX] = 0.0;
@@ -1079,6 +1664,7 @@ stock CreatePlayerProgressBar(playerid, Float:x, Float:y, Float:width = 60.0, Fl
 		DestroyPlayerProgressBar(playerid, barid);
 		return INVALID_PLAYER_BAR_ID;
 	}
+	PB_InvalidateFreeTDCache(playerid);
 	return barid;
 }
 
@@ -1095,7 +1681,9 @@ stock DestroyPlayerProgressBar(playerid, barid)
 	PB_KillRing(playerid, barid);
 	ProgressBar[playerid][barid][PB_Valid] = false;
 	ProgressBar[playerid][barid][PB_Visible] = false;
+	ProgressBar[playerid][barid][PB_Rendered] = false;
 	ProgressBar[playerid][barid][PB_LabelEnabled] = false;
+	PB_InvalidateFreeTDCache(playerid);
 	return 1;
 }
 
@@ -1125,7 +1713,7 @@ stock ShowPlayerProgressBar(playerid, barid)
 		}
 		return 1;
 	}
-	PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Border]);
+	if (ProgressBar[playerid][barid][PB_Border] != PB_NO_TD) PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Border]);
 	PB_ShowInner(playerid, barid);
 	if (ProgressBar[playerid][barid][PB_LabelEnabled] && ProgressBar[playerid][barid][PB_Label] != PB_NO_TD)
 	{
@@ -1137,6 +1725,7 @@ stock ShowPlayerProgressBar(playerid, barid)
 stock HidePlayerProgressBar(playerid, barid)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (!ProgressBar[playerid][barid][PB_Visible]) return 1;
 	ProgressBar[playerid][barid][PB_Visible] = false;
 	if (ProgressBar[playerid][barid][PB_Label] != PB_NO_TD)
 	{
@@ -1152,8 +1741,8 @@ stock HidePlayerProgressBar(playerid, barid)
 		}
 		return 1;
 	}
-	PlayerTextDrawHide(playerid, ProgressBar[playerid][barid][PB_Border]);
-	PlayerTextDrawHide(playerid, ProgressBar[playerid][barid][PB_Background]);
+	if (ProgressBar[playerid][barid][PB_Border] != PB_NO_TD) PlayerTextDrawHide(playerid, ProgressBar[playerid][barid][PB_Border]);
+	if (ProgressBar[playerid][barid][PB_Background] != PB_NO_TD) PlayerTextDrawHide(playerid, ProgressBar[playerid][barid][PB_Background]);
 	if (ProgressBar[playerid][barid][PB_Progress] != PB_NO_TD) PlayerTextDrawHide(playerid, ProgressBar[playerid][barid][PB_Progress]);
 	return 1;
 }
@@ -1163,13 +1752,27 @@ stock bool:IsPlayerProgressBarVisible(playerid, barid)
 	return IsValidPlayerProgressBar(playerid, barid) && ProgressBar[playerid][barid][PB_Visible];
 }
 
+stock bool:IsPlayerProgressBarRendered(playerid, barid)
+{
+	return IsValidPlayerProgressBar(playerid, barid) && ProgressBar[playerid][barid][PB_Rendered];
+}
+
+stock ResetPlayerProgressBar(playerid, barid)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	StopPlayerProgressBarInterpolation(playerid, barid);
+	StopAutoFillPlayerProgressBar(playerid, barid);
+	StopPlayerProgressBarBlink(playerid, barid);
+	return SetPlayerProgressBarValue(playerid, barid, ProgressBar[playerid][barid][PB_MinValue]);
+}
+
 /*
 ================================================================================
     3. Value & Range Control
 ================================================================================
 */
 
-stock SetPlayerProgressBarValue(playerid, barid, Float:value)
+stock SetPlayerProgressBarValue(playerid, barid, Float:value, bool:bar_show = false)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
 	if (value < ProgressBar[playerid][barid][PB_MinValue]) value = ProgressBar[playerid][barid][PB_MinValue];
@@ -1181,7 +1784,7 @@ stock SetPlayerProgressBarValue(playerid, barid, Float:value)
 		PB_RenderMain(playerid, barid);
 		PB_UpdateLabelText(playerid, barid);
 	}
-	if (!ProgressBar[playerid][barid][PB_Visible]) ShowPlayerProgressBar(playerid, barid);
+	if (bar_show && !ProgressBar[playerid][barid][PB_Visible]) ShowPlayerProgressBar(playerid, barid);
 	return 1;
 }
 
@@ -1194,10 +1797,15 @@ stock Float:GetPlayerProgressBarValue(playerid, barid)
 stock SetPlayerProgressBarMaxValue(playerid, barid, Float:max = 100.0)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (max == ProgressBar[playerid][barid][PB_MaxValue]) return 1;
+	if (max < ProgressBar[playerid][barid][PB_MinValue]) ProgressBar[playerid][barid][PB_MinValue] = max;
 	ProgressBar[playerid][barid][PB_MaxValue] = max;
 	if (ProgressBar[playerid][barid][PB_Value] > max) ProgressBar[playerid][barid][PB_Value] = max;
+	if (ProgressBar[playerid][barid][PB_Value] < ProgressBar[playerid][barid][PB_MinValue]) ProgressBar[playerid][barid][PB_Value] = ProgressBar[playerid][barid][PB_MinValue];
 	if (ProgressBar[playerid][barid][PB_AutoFillMax] > max) ProgressBar[playerid][barid][PB_AutoFillMax] = max;
+	if (ProgressBar[playerid][barid][PB_Gradient]) PB_ApplyColours(playerid, barid);
 	PB_RenderMain(playerid, barid);
+	PB_UpdateLabelText(playerid, barid);
 	return 1;
 }
 
@@ -1210,9 +1818,11 @@ stock Float:GetPlayerProgressBarMaxValue(playerid, barid)
 stock SetPlayerProgressBarMinValue(playerid, barid, Float:min = 0.0)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (min == ProgressBar[playerid][barid][PB_MinValue]) return 1;
 	ProgressBar[playerid][barid][PB_MinValue] = min;
 	if (ProgressBar[playerid][barid][PB_Value] < min) ProgressBar[playerid][barid][PB_Value] = min;
 	if (ProgressBar[playerid][barid][PB_MaxValue] < min) ProgressBar[playerid][barid][PB_MaxValue] = min;
+	if (ProgressBar[playerid][barid][PB_Gradient]) PB_ApplyColours(playerid, barid);
 	PB_RenderMain(playerid, barid);
 	PB_UpdateLabelText(playerid, barid);
 	return 1;
@@ -1228,11 +1838,13 @@ stock SetPlayerProgressBarRange(playerid, barid, Float:min, Float:max)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
 	if (max < min) max = min;
+	if (min == ProgressBar[playerid][barid][PB_MinValue] && max == ProgressBar[playerid][barid][PB_MaxValue]) return 1;
 	ProgressBar[playerid][barid][PB_MinValue] = min;
 	ProgressBar[playerid][barid][PB_MaxValue] = max;
 	if (ProgressBar[playerid][barid][PB_Value] < min) ProgressBar[playerid][barid][PB_Value] = min;
 	if (ProgressBar[playerid][barid][PB_Value] > max) ProgressBar[playerid][barid][PB_Value] = max;
 	if (ProgressBar[playerid][barid][PB_AutoFillMax] > max) ProgressBar[playerid][barid][PB_AutoFillMax] = max;
+	if (ProgressBar[playerid][barid][PB_Gradient]) PB_ApplyColours(playerid, barid);
 	PB_RenderMain(playerid, barid);
 	PB_UpdateLabelText(playerid, barid);
 	return 1;
@@ -1247,6 +1859,7 @@ stock SetPlayerProgressBarRange(playerid, barid, Float:min, Float:max)
 stock SetPlayerProgressBarPos(playerid, barid, Float:x, Float:y)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (ProgressBar[playerid][barid][PB_Rendered] && x == ProgressBar[playerid][barid][PB_PosX] && y == ProgressBar[playerid][barid][PB_PosY]) return 1;
 	ProgressBar[playerid][barid][PB_PosX] = x;
 	ProgressBar[playerid][barid][PB_PosY] = y;
 	return _:PB_Render(playerid, barid);
@@ -1263,6 +1876,8 @@ stock GetPlayerProgressBarPos(playerid, barid, &Float:x, &Float:y)
 stock SetPlayerProgressBarSize(playerid, barid, Float:width, Float:height)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	height = PB_CheckLegacyHeight(height, ProgressBar[playerid][barid][PB_Style], ProgressBar[playerid][barid][PB_Direction]);
+	if (ProgressBar[playerid][barid][PB_Rendered] && width == ProgressBar[playerid][barid][PB_Width] && height == ProgressBar[playerid][barid][PB_Height]) return 1;
 	ProgressBar[playerid][barid][PB_Width] = width;
 	ProgressBar[playerid][barid][PB_Height] = height;
 	return _:PB_Render(playerid, barid);
@@ -1279,6 +1894,7 @@ stock GetPlayerProgressBarSize(playerid, barid, &Float:width, &Float:height)
 stock SetPlayerProgressBarWidth(playerid, barid, Float:width)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (ProgressBar[playerid][barid][PB_Rendered] && width == ProgressBar[playerid][barid][PB_Width]) return 1;
 	ProgressBar[playerid][barid][PB_Width] = width;
 	return _:PB_Render(playerid, barid);
 }
@@ -1292,6 +1908,8 @@ stock Float:GetPlayerProgressBarWidth(playerid, barid)
 stock SetPlayerProgressBarHeight(playerid, barid, Float:height)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	height = PB_CheckLegacyHeight(height, ProgressBar[playerid][barid][PB_Style], ProgressBar[playerid][barid][PB_Direction]);
+	if (ProgressBar[playerid][barid][PB_Rendered] && height == ProgressBar[playerid][barid][PB_Height]) return 1;
 	ProgressBar[playerid][barid][PB_Height] = height;
 	return _:PB_Render(playerid, barid);
 }
@@ -1305,10 +1923,12 @@ stock Float:GetPlayerProgressBarHeight(playerid, barid)
 stock SetPlayerProgressBarDirection(playerid, barid, direction = PB_DIR_RIGHT)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
-	ProgressBar[playerid][barid][PB_Direction] = (PB_DIR_RIGHT <= direction <= PB_DIR_DOWN) ? direction : PB_DIR_RIGHT;
-	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_RING) return _:PB_Render(playerid, barid);
-	PB_RenderMain(playerid, barid);
-	return 1;
+	if (direction < PB_DIR_RIGHT || direction > PB_DIR_DOWN) direction = PB_DIR_RIGHT;
+	if (ProgressBar[playerid][barid][PB_Rendered] && direction == ProgressBar[playerid][barid][PB_Direction]) return 1;
+	ProgressBar[playerid][barid][PB_Direction] = direction;
+	ProgressBar[playerid][barid][PB_Height] = PB_CheckLegacyHeight(ProgressBar[playerid][barid][PB_Height], ProgressBar[playerid][barid][PB_Style], direction);
+	PB_Kill(playerid, ProgressBar[playerid][barid][PB_Progress]);
+	return _:PB_Render(playerid, barid);
 }
 
 stock GetPlayerProgressBarDirection(playerid, barid)
@@ -1326,16 +1946,56 @@ stock GetPlayerProgressBarDirection(playerid, barid)
 stock SetPlayerProgressBarStyle(playerid, barid, style = PB_STYLE_BAR, segments = PB_RING_SEGMENTS, Float:segmentscale = PB_RING_SEGMENT_SCALE)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
-	ProgressBar[playerid][barid][PB_Style] = (PB_STYLE_BAR <= style <= PB_STYLE_CIRCLE) ? style : PB_STYLE_BAR;
-	ProgressBar[playerid][barid][PB_Segments] = PB_ClampSegments(segments);
-	if (segmentscale > 0.0) ProgressBar[playerid][barid][PB_SegmentScale] = segmentscale;
-	return _:PB_Render(playerid, barid);
+	new targetStyle = (PB_STYLE_BAR <= style <= PB_STYLE_CIRCLE) ? style : PB_STYLE_BAR;
+	new targetSegs = PB_ClampSegments(segments);
+	if (segmentscale < PB_RING_SCALE_MIN) segmentscale = PB_RING_SCALE_MIN;
+	else if (segmentscale > PB_RING_SCALE_MAX) segmentscale = PB_RING_SCALE_MAX;
+	if (ProgressBar[playerid][barid][PB_Rendered] && targetStyle == ProgressBar[playerid][barid][PB_Style] && targetSegs == ProgressBar[playerid][barid][PB_Segments] && segmentscale == ProgressBar[playerid][barid][PB_SegmentScale]) return 1;
+	new currentNeeded = PB_GetBarRequiredTextDraws(ProgressBar[playerid][barid][PB_Style], ProgressBar[playerid][barid][PB_Segments], false);
+	new targetNeeded = PB_GetBarRequiredTextDraws(targetStyle, targetSegs, false);
+	new delta = targetNeeded - currentNeeded;
+	if (delta > 0 && !PB_CanAllocatePlayerTextDraws(playerid, delta + PB_TD_SAFETY_HEADROOM))
+	{
+		return 0;
+	}
+	ProgressBar[playerid][barid][PB_Style] = targetStyle;
+	ProgressBar[playerid][barid][PB_Segments] = targetSegs;
+	ProgressBar[playerid][barid][PB_SegmentScale] = segmentscale;
+	ProgressBar[playerid][barid][PB_Height] = PB_CheckLegacyHeight(ProgressBar[playerid][barid][PB_Height], targetStyle, ProgressBar[playerid][barid][PB_Direction]);
+	new ret = _:PB_Render(playerid, barid);
+	PB_InvalidateFreeTDCache(playerid);
+	return ret;
 }
 
 stock GetPlayerProgressBarStyle(playerid, barid)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
 	return ProgressBar[playerid][barid][PB_Style];
+}
+
+stock SetPlayerProgressBarSegments(playerid, barid, segments)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	new targetSegs = PB_ClampSegments(segments);
+	if (ProgressBar[playerid][barid][PB_Rendered] && targetSegs == ProgressBar[playerid][barid][PB_Segments]) return 1;
+	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_RING)
+	{
+		new currentNeeded = ProgressBar[playerid][barid][PB_Segments] * 2;
+		new targetNeeded = targetSegs * 2;
+		new delta = targetNeeded - currentNeeded;
+		if (delta > 0 && !PB_CanAllocatePlayerTextDraws(playerid, delta + PB_TD_SAFETY_HEADROOM))
+		{
+			return 0;
+		}
+	}
+	ProgressBar[playerid][barid][PB_Segments] = targetSegs;
+	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_RING)
+	{
+		new ret = _:PB_Render(playerid, barid);
+		PB_InvalidateFreeTDCache(playerid);
+		return ret;
+	}
+	return 1;
 }
 
 stock GetPlayerProgressBarSegments(playerid, barid)
@@ -1347,7 +2007,9 @@ stock GetPlayerProgressBarSegments(playerid, barid)
 stock SetPlayerProgressBarRingScale(playerid, barid, Float:scale)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
-	if (scale <= 0.0) return 0;
+	if (scale < PB_RING_SCALE_MIN) scale = PB_RING_SCALE_MIN;
+	else if (scale > PB_RING_SCALE_MAX) scale = PB_RING_SCALE_MAX;
+	if (ProgressBar[playerid][barid][PB_Rendered] && scale == ProgressBar[playerid][barid][PB_SegmentScale]) return 1;
 	ProgressBar[playerid][barid][PB_SegmentScale] = scale;
 	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_RING) return _:PB_Render(playerid, barid);
 	return 1;
@@ -1368,10 +2030,19 @@ stock Float:GetPlayerProgressBarRingScale(playerid, barid)
 stock SetPlayerProgressBarColour(playerid, barid, colour = PB_DEFAULT_COLOUR)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (ProgressBar[playerid][barid][PB_Rendered] && colour == ProgressBar[playerid][barid][PB_Colour]) return 1;
 	ProgressBar[playerid][barid][PB_Colour] = colour;
 	PB_ApplyColours(playerid, barid);
 	return 1;
 }
+
+#define SetPlayerProgressBarSegmentScale SetPlayerProgressBarRingScale
+#define GetPlayerProgressBarSegmentScale GetPlayerProgressBarRingScale
+#define SetPlayerProgressBarAutoFill AutoFillPlayerProgressBar
+#define SetPlayerProgressBarBlink BlinkPlayerProgressBar
+#define SetPlayerProgressBarFlash BlinkPlayerProgressBar
+#define StopPlayerProgressBarFlash StopPlayerProgressBarBlink
+#define IsPlayerProgressBarFlashing IsPlayerProgressBarBlinking
 
 #define SetPlayerProgressBarColor SetPlayerProgressBarColour
 
@@ -1386,7 +2057,9 @@ stock GetPlayerProgressBarColour(playerid, barid)
 stock SetPlayerProgressBarBorder(playerid, barid, Float:border = PB_BORDER_DEFAULT)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
-	ProgressBar[playerid][barid][PB_BorderSize] = PB_ClampBorder(border);
+	new Float:clamped = PB_ClampBorder(border);
+	if (ProgressBar[playerid][barid][PB_Rendered] && clamped == ProgressBar[playerid][barid][PB_BorderSize]) return 1;
+	ProgressBar[playerid][barid][PB_BorderSize] = clamped;
 	return _:PB_Render(playerid, barid);
 }
 
@@ -1399,6 +2072,7 @@ stock Float:GetPlayerProgressBarBorder(playerid, barid)
 stock SetPlayerProgressBarBorderColor(playerid, barid, bordercolor = 0)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (ProgressBar[playerid][barid][PB_Rendered] && bordercolor == ProgressBar[playerid][barid][PB_BorderColour]) return 1;
 	ProgressBar[playerid][barid][PB_BorderColour] = bordercolor;
 	PB_ApplyColours(playerid, barid);
 	return 1;
@@ -1437,6 +2111,7 @@ stock AutoFillPlayerProgressBar(playerid, barid, Float:maxvalue = -1.0)
 	ProgressBar[playerid][barid][PB_AutoFillTimer] = SetTimerEx("PB_AutoFillTick", PB_AUTOFILL_TICK, true, "ii", playerid, barid);
 	if (ProgressBar[playerid][barid][PB_Gradient]) PB_ApplyColours(playerid, barid);
 	PB_RenderMain(playerid, barid);
+	if (!ProgressBar[playerid][barid][PB_Visible]) ShowPlayerProgressBar(playerid, barid);
 	return 1;
 }
 
@@ -1450,6 +2125,7 @@ stock StopAutoFillPlayerProgressBar(playerid, barid)
 	PB_UpdateLabelText(playerid, barid);
 	return 1;
 }
+#define StopPlayerProgressBarAutoFill StopAutoFillPlayerProgressBar
 
 stock bool:IsPlayerProgressBarAutoFilling(playerid, barid)
 {
@@ -1459,7 +2135,11 @@ stock bool:IsPlayerProgressBarAutoFilling(playerid, barid)
 forward PB_AutoFillTick(playerid, barid);
 public PB_AutoFillTick(playerid, barid)
 {
-	if (!IsValidPlayerProgressBar(playerid, barid) || !ProgressBar[playerid][barid][PB_AutoFill]) return 0;
+	if (!IsValidPlayerProgressBar(playerid, barid) || !ProgressBar[playerid][barid][PB_AutoFill])
+	{
+		PB_KillAutoFill(playerid, barid);
+		return 0;
+	}
 	if (ProgressBar[playerid][barid][PB_Style] == PB_STYLE_RING)
 	{
 		new lit = PB_RingLit(playerid, barid);
@@ -1470,6 +2150,7 @@ public PB_AutoFillTick(playerid, barid)
 		}
 		ProgressBar[playerid][barid][PB_LastLit] = lit;
 	}
+	if (ProgressBar[playerid][barid][PB_Gradient]) PB_ApplyColours(playerid, barid);
 	PB_RenderMain(playerid, barid);
 	PB_UpdateLabelText(playerid, barid);
 	return 1;
@@ -1484,7 +2165,11 @@ public PB_AutoFillTick(playerid, barid)
 forward PB_LerpTick(playerid, barid);
 public PB_LerpTick(playerid, barid)
 {
-	if (!IsValidPlayerProgressBar(playerid, barid) || !ProgressBar[playerid][barid][PB_LerpActive]) return 0;
+	if (!IsValidPlayerProgressBar(playerid, barid) || !ProgressBar[playerid][barid][PB_LerpActive])
+	{
+		PB_KillLerp(playerid, barid);
+		return 0;
+	}
 	new now = GetTickCount();
 	new elapsed = now - ProgressBar[playerid][barid][PB_LerpStartTime];
 	new duration = ProgressBar[playerid][barid][PB_LerpDuration];
@@ -1517,9 +2202,9 @@ stock InterpolatePlayerProgressBarValue(playerid, barid, Float:target_value, dur
 	PB_KillLerp(playerid, barid);
 	if (target_value < ProgressBar[playerid][barid][PB_MinValue]) target_value = ProgressBar[playerid][barid][PB_MinValue];
 	if (target_value > ProgressBar[playerid][barid][PB_MaxValue]) target_value = ProgressBar[playerid][barid][PB_MaxValue];
-	if (duration_ms <= 0)
+	if (duration_ms <= 0 || target_value == ProgressBar[playerid][barid][PB_Value])
 	{
-		SetPlayerProgressBarValue(playerid, barid, target_value);
+		SetPlayerProgressBarValue(playerid, barid, target_value, true);
 		return 1;
 	}
 	ProgressBar[playerid][barid][PB_LerpActive] = true;
@@ -1527,7 +2212,7 @@ stock InterpolatePlayerProgressBarValue(playerid, barid, Float:target_value, dur
 	ProgressBar[playerid][barid][PB_LerpTargetVal] = target_value;
 	ProgressBar[playerid][barid][PB_LerpStartTime] = GetTickCount();
 	ProgressBar[playerid][barid][PB_LerpDuration] = duration_ms;
-	ProgressBar[playerid][barid][PB_LerpTimer] = SetTimerEx("PB_LerpTick", 30, true, "ii", playerid, barid);
+	ProgressBar[playerid][barid][PB_LerpTimer] = SetTimerEx("PB_LerpTick", PB_TICK_RATE, true, "ii", playerid, barid);
 	if (!ProgressBar[playerid][barid][PB_Visible]) ShowPlayerProgressBar(playerid, barid);
 	return 1;
 }
@@ -1607,6 +2292,7 @@ stock BlinkPlayerProgressBar(playerid, barid, interval = PB_BLINK_DEFAULT, durat
 	ProgressBar[playerid][barid][PB_BlinkDuration] = duration;
 	ProgressBar[playerid][barid][PB_BlinkTimer] = SetTimerEx("PB_BlinkTick", interval, true, "ii", playerid, barid);
 	PB_ApplyColours(playerid, barid);
+	if (!ProgressBar[playerid][barid][PB_Visible]) ShowPlayerProgressBar(playerid, barid);
 	return 1;
 }
 
@@ -1627,7 +2313,11 @@ stock bool:IsPlayerProgressBarBlinking(playerid, barid)
 forward PB_BlinkTick(playerid, barid);
 public PB_BlinkTick(playerid, barid)
 {
-	if (!IsValidPlayerProgressBar(playerid, barid) || !ProgressBar[playerid][barid][PB_Blinking]) return 0;
+	if (!IsValidPlayerProgressBar(playerid, barid) || !ProgressBar[playerid][barid][PB_Blinking])
+	{
+		PB_KillBlink(playerid, barid);
+		return 0;
+	}
 	new duration = ProgressBar[playerid][barid][PB_BlinkDuration];
 	if (duration > 0 && GetTickCount() - ProgressBar[playerid][barid][PB_BlinkStart] >= duration)
 	{
@@ -1645,14 +2335,28 @@ public PB_BlinkTick(playerid, barid)
 ================================================================================
 */
 
-stock SetPlayerProgressBarLabel(playerid, barid, bool:enable, const template[] = "{PERCENT}%", colour = 0xFFFFFFFF, alignment = 2, font = 1, Float:scaleX = 0.0, Float:scaleY = 0.0, Float:offsetX = 0.0, Float:offsetY = 0.0)
+stock SetPlayerProgressBarLabel(playerid, barid, bool:enable, const template[] = "{PERCENT}%", colour = 0xFFFFFFFF, alignment = 2, font = 1, Float:scaleX = 0.0, Float:scaleY = 0.0, Float:offsetX = 0.0, Float:offsetY = 0.0, bool:followColour = false, orientation = PB_LABEL_ORIENT_AUTO)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (enable && ProgressBar[playerid][barid][PB_Label] == PB_NO_TD)
+	{
+		if (!PB_CanAllocatePlayerTextDraws(playerid, 1 + PB_TD_SAFETY_HEADROOM)) return 0;
+	}
 	ProgressBar[playerid][barid][PB_LabelEnabled] = enable;
 	ProgressBar[playerid][barid][PB_LabelAutoScale] = (scaleX <= 0.0 || scaleY <= 0.0);
 	ProgressBar[playerid][barid][PB_LabelText][0] = '\0';
 	strcat(ProgressBar[playerid][barid][PB_LabelText], template, 32);
-	ProgressBar[playerid][barid][PB_LabelColour] = colour;
+	if (colour == 0)
+	{
+		ProgressBar[playerid][barid][PB_LabelFollowColour] = true;
+		ProgressBar[playerid][barid][PB_LabelColour] = PB_GetCurrentColour(playerid, barid);
+	}
+	else
+	{
+		ProgressBar[playerid][barid][PB_LabelColour] = colour;
+		ProgressBar[playerid][barid][PB_LabelFollowColour] = followColour;
+	}
+	ProgressBar[playerid][barid][PB_LabelOrientation] = orientation;
 	ProgressBar[playerid][barid][PB_LabelAlignment] = alignment;
 	ProgressBar[playerid][barid][PB_LabelFont] = font;
 	ProgressBar[playerid][barid][PB_LabelScaleX] = scaleX;
@@ -1688,22 +2392,105 @@ stock SetPlayerProgressBarLabelText(playerid, barid, const template[])
 stock SetPlayerProgressBarLabelColour(playerid, barid, colour)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
-	ProgressBar[playerid][barid][PB_LabelColour] = colour;
+	if (colour == 0)
+	{
+		ProgressBar[playerid][barid][PB_LabelFollowColour] = true;
+		ProgressBar[playerid][barid][PB_LabelColour] = PB_GetCurrentColour(playerid, barid);
+	}
+	else
+	{
+		ProgressBar[playerid][barid][PB_LabelFollowColour] = false;
+		ProgressBar[playerid][barid][PB_LabelColour] = colour;
+	}
 	if (ProgressBar[playerid][barid][PB_Label] != PB_NO_TD)
 	{
-		PBP_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Label], colour);
-		if (ProgressBar[playerid][barid][PB_Visible]) PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Label]);
+		new col = PB_GetLabelColour(playerid, barid);
+		ProgressBar[playerid][barid][PB_LabelCurrentColour] = col;
+		PBP_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Label], col);
+		if (ProgressBar[playerid][barid][PB_Visible])
+		{
+			PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Label]);
+		}
 	}
 	return 1;
+}
+
+stock SetPlayerProgressBarLabelFollowColour(playerid, barid, bool:follow)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	ProgressBar[playerid][barid][PB_LabelFollowColour] = follow;
+	if (ProgressBar[playerid][barid][PB_Label] != PB_NO_TD)
+	{
+		new col = PB_GetLabelColour(playerid, barid);
+		ProgressBar[playerid][barid][PB_LabelCurrentColour] = col;
+		PBP_TextDrawColour(playerid, ProgressBar[playerid][barid][PB_Label], col);
+		if (ProgressBar[playerid][barid][PB_Visible])
+		{
+			PlayerTextDrawShow(playerid, ProgressBar[playerid][barid][PB_Label]);
+		}
+	}
+	return 1;
+}
+#define SetPlayerProgressBarLabelFollowColor SetPlayerProgressBarLabelFollowColour
+
+stock bool:GetPlayerProgressBarLabelFollowColour(playerid, barid)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return false;
+	return ProgressBar[playerid][barid][PB_LabelFollowColour];
+}
+#define GetPlayerProgressBarLabelFollowColor GetPlayerProgressBarLabelFollowColour
+
+stock SetPlayerProgressBarLabelOrientation(playerid, barid, orientation = PB_LABEL_ORIENT_AUTO)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	if (orientation < PB_LABEL_ORIENT_AUTO || orientation > PB_LABEL_ORIENT_VERTICAL) orientation = PB_LABEL_ORIENT_AUTO;
+	ProgressBar[playerid][barid][PB_LabelOrientation] = orientation;
+	PB_RenderLabel(playerid, barid);
+	return 1;
+}
+
+stock GetPlayerProgressBarLabelOrientation(playerid, barid)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return PB_LABEL_ORIENT_AUTO;
+	return ProgressBar[playerid][barid][PB_LabelOrientation];
 }
 #define SetPlayerProgressBarLabelColor SetPlayerProgressBarLabelColour
 
 stock GetPlayerProgressBarLabelColour(playerid, barid)
 {
 	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
-	return ProgressBar[playerid][barid][PB_LabelColour];
+	return PB_GetLabelColour(playerid, barid);
 }
 #define GetPlayerProgressBarLabelColor GetPlayerProgressBarLabelColour
+
+stock GetPlayerProgressBarLabelScale(playerid, barid, &Float:scaleX, &Float:scaleY)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	scaleX = ProgressBar[playerid][barid][PB_LabelScaleX];
+	scaleY = ProgressBar[playerid][barid][PB_LabelScaleY];
+	return 1;
+}
+
+stock GetPlayerProgressBarLabelOffset(playerid, barid, &Float:offsetX, &Float:offsetY)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	offsetX = ProgressBar[playerid][barid][PB_LabelOffsetX];
+	offsetY = ProgressBar[playerid][barid][PB_LabelOffsetY];
+	return 1;
+}
+
+stock GetPlayerProgressBarLabelAlignment(playerid, barid)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	return ProgressBar[playerid][barid][PB_LabelAlignment];
+}
+#define GetPlayerProgressBarLabelAlign GetPlayerProgressBarLabelAlignment
+
+stock GetPlayerProgressBarLabelFont(playerid, barid)
+{
+	if (!IsValidPlayerProgressBar(playerid, barid)) return 0;
+	return ProgressBar[playerid][barid][PB_LabelFont];
+}
 
 stock SetPlayerProgressBarLabelScale(playerid, barid, Float:scaleX, Float:scaleY)
 {
@@ -1754,6 +2541,7 @@ public OnPlayerDisconnect(playerid, reason)
 			PB_TDPart[playerid][t] = 0;
 			PB_TDColour[playerid][t] = 0;
 		}
+		PB_InvalidateFreeTDCache(playerid);
 	}
 	#if defined PB_OnPlayerDisconnect
 		return PB_OnPlayerDisconnect(playerid, reason);

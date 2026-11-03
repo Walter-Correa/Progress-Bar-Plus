@@ -1,28 +1,99 @@
 {
-  "name": "Progress Bar Plus - Editor",
-  "max_players": 10,
-  "announce": false,
-  "enable_query": true,
-  "network":
-  {
-    "port": 7777,
-    "bind": ""
-  },
-  "pawn":
-  {
-    "main_scripts": ["GM_ProgressBarEditor 1"],
-    "side_scripts": ["filterscripts/FS_ProgressBarEditor"],
-    "legacy_plugins": []
-  },
-  "rcon":
-  {
-    "enable": false,
-    "password": "4czqtvlfi2xerhpi"
-  },
-  "game":
-  {
-    "use_entry_exit_markers": false,
-    "use_player_ped_anims": true,
-    "use_all_animations": true
-  }
+	"name": "Progress Bar Plus - Editor",
+	"max_players": 10,
+	"announce": false,
+	"chat_input_filter": true,
+    "enable_query": true,
+    "sleep": 5.0,
+    "use_dyn_ticks": true,
+    "game":
+    {
+        "allow_interior_weapons": true,
+        "chat_radius": 30.0,
+        "death_drop_amount": 0,
+        "gravity": 0.00800000037997961,
+        "group_player_objects": false,
+        "lag_compensation_mode": 1,
+        "map": "",
+        "mode": "",
+        "nametag_draw_radius": 30.0,
+        "player_marker_draw_radius": 180.0,
+        "player_marker_mode": 2,
+        "time": 12,
+        "use_all_animations": true,
+        "use_chat_radius": false,
+        "use_entry_exit_markers": false,
+        "use_instagib": false,
+        "use_manual_engine_and_lights": true,
+        "use_nametag_los": true,
+        "use_nametags": true,
+        "use_player_marker_draw_radius": false,
+        "use_player_ped_anims": true,
+        "use_stunt_bonuses": false,
+        "use_vehicle_friendly_fire": false,
+        "use_zone_names": false,
+        "validate_animations": false,
+        "vehicle_respawn_time": 10000,
+        "weather": 10
+    },
+	"logging":
+    {
+        "enable": true,
+        "file": "server_log.txt",
+        "log_chat": false,
+        "log_connection_messages": true,
+        "log_cookies": false,
+        "log_deaths": false,
+        "log_queries": false,
+        "log_sqlite": false,
+        "log_sqlite_queries": false,
+        "timestamp_format": "[%d-%m-%Y %H:%M:%S]",
+        "use_prefix": false,
+        "use_timestamp": true
+    },
+	"network":
+    {
+        "acks_limit": 5000,
+        "aiming_sync_rate": 30,
+        "allow_037_clients": true,
+        "bind": "",
+        "cookie_reseed_time": 300000,
+        "grace_period": 5000,
+        "http_threads": 250,
+        "in_vehicle_sync_rate": 30,
+        "limits_ban_time": 5000,
+        "message_hole_limit": 5000,
+        "messages_limit": 1000,
+        "minimum_connection_time": 0,
+        "minimum_send_bits_per_second": 96000.0,
+        "mtu": 576,
+        "multiplier": 10,
+        "on_foot_sync_rate": 30,
+        "player_marker_sync_rate": 2500,
+        "player_timeout": 15000,
+        "port": 7777,
+        "public_addr": "",
+        "stream_radius": 180.0,
+        "stream_rate": 1000,
+        "time_sync_rate": 30000,
+        "use_lan_mode": false,
+        "use_omp_encryption": false
+    },
+	"pawn":
+	{
+		"main_scripts": ["GM_ProgressBarEditor 1"],
+		"side_scripts": ["filterscripts/FS_ProgressBarEditor"],
+		"legacy_plugins": []
+	},
+	"rcon":
+	{
+		"enable": false,
+		"password": "4czqtvlfi2xerhpi"
+	},
+	"game":
+	{
+		"use_entry_exit_markers": false,
+		"use_player_ped_anims": true,
+		"use_all_animations": true
+	}
 }

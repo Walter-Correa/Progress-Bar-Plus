@@ -72,9 +72,9 @@ jobs:
         id: ver
         shell: pwsh
         run: |
-          $m = Select-String -Path ProgressBar.inc -Pattern 'Version:\s+([0-9\.]+)'
-          if (-not $m) { throw "Version not found in ProgressBar.inc" }
-          $v = $m.Matches[0].Groups[1].Value.Trim()
+          $m = Select-String -Path ProgressBar.inc -Pattern '#define\s+PROGRESSBAR_VERSION_STRING\s+"([^"]+)"'
+          if (-not $m) { throw "PROGRESSBAR_VERSION_STRING not found in ProgressBar.inc" }
+          $v = $m.Matches[0].Groups[1].Value
           "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Download Artifact

@@ -5,12 +5,12 @@
     generation suite for SA-MP and open.mp.
 
     Author:      Walter Corrêa
-    Version:     2.1.0
+    Version:     2.2.0
     Repository:  https://github.com/Walter-Correa/Progress-Bar-Plus
     License:     Mozilla Public License 2.0 (MPL-2.0)
 
     Dependencies:
-    - Progress Bar Plus (ProgressBar.inc v2.1.0+)
+    - Progress Bar Plus (ProgressBar.inc v2.2.0+)
     - Pawn.CMD by urShadow (https://github.com/urShadow/Pawn.CMD)
 ================================================================================
 */
@@ -63,7 +63,7 @@
 	#define PBE_RCON_ONLY (0)
 #endif
 
-#define PBE_VERSION          "2.1.0"
+#define PBE_VERSION          PROGRESSBAR_VERSION_STRING
 #define PBE_INVALID_SESSION  (-1)
 #define PBE_MAX_NAME         (32)
 #define PBE_MAX_PROJECT_NAME (40)
@@ -355,6 +355,8 @@ enum E_PBE_BAR
 	EBar_BlinkBorderColor,
 	bool:EBar_LabelShow,
 	bool:EBar_LabelAutoScale,
+	bool:EBar_LabelFollowCol,
+	EBar_LabelOrient,
 	EBar_LabelText[32],
 	EBar_LabelColor,
 	EBar_LabelFont,
@@ -390,6 +392,7 @@ enum E_PBE_SESSION
 	EP_RelPendingAct,
 	EP_DeleteTargetIdx,
 	EP_LastRingRebuild,
+	bool:EP_RingPendingRebuild,
 	Float:EP_OrigX,
 	Float:EP_OrigY,
 	Float:EP_RawX,
@@ -399,8 +402,8 @@ enum E_PBE_SESSION
 	Float:EP_OrigBorder,
 	Float:EP_OrigVal,
 	EP_ProjectName[PBE_MAX_PROJECT_NAME],
-	PlayerText:EP_PTDStatus,
-	PlayerText:EP_PTDHelper
+	Text:EP_TDStatus,
+	Text:EP_TDHelper
 };
 
 enum E_PBE_UNDO_META
@@ -809,22 +812,23 @@ static stock Text:PBE_MakeGlobalLabel(Float:x, Float:y, const text[], Float:lx, 
 	return td;
 }
 
-static stock PlayerText:PBE_MakePlayerLabel(playerid, Float:x, Float:y, const text[], Float:lx, Float:ly)
+static stock Text:PBE_MakeSessionLabel(Float:x, Float:y, const text[], Float:lx, Float:ly)
 {
 	new buf[256];
 	format(buf, sizeof buf, "%s", text);
-	new PlayerText:ptd = CreatePlayerTextDraw(playerid, x, y, buf);
-	if (ptd == PBE_NO_PTD) return PBE_NO_PTD;
-	PlayerTextDrawFont(playerid, ptd, PBE_FONT_1);
-	PlayerTextDrawLetterSize(playerid, ptd, lx, ly);
-	PlayerTextDrawTextSize(playerid, ptd, 0.0, 630.0);
-	PlayerTextDrawAlignment(playerid, ptd, PBE_ALIGN_CENTER);
-	PBE_PTDColor(playerid, ptd, 0xF8FAFCFF);
-	PBE_PTDBgColor(playerid, ptd, 0x000000CC);
-	PlayerTextDrawSetOutline(playerid, ptd, 1);
-	PlayerTextDrawSetShadow(playerid, ptd, 0);
-	PlayerTextDrawSetProportional(playerid, ptd, PBE_TD_BOOL(true));
-	return ptd;
+	new Text:td = TextDrawCreate(x, y, buf);
+	if (td == PBE_NO_TD) return PBE_NO_TD;
+	TextDrawFont(td, PBE_FONT_1);
+	TextDrawLetterSize(td, lx, ly);
+	TextDrawTextSize(td, 0.0, 630.0);
+	TextDrawAlignment(td, PBE_ALIGN_CENTER);
+	PBE_TDColor(td, 0xF8FAFCFF);
+	PBE_TDBgColor(td, 0x000000CC);
+	TextDrawSetOutline(td, 1);
+	TextDrawSetShadow(td, 0);
+	TextDrawSetProportional(td, PBE_TD_BOOL(true));
+	TextDrawSetSelectable(td, PBE_TD_BOOL(false));
+	return td;
 }
 
 static stock PBE_KillGlobalTD(&Text:td)
@@ -833,15 +837,6 @@ static stock PBE_KillGlobalTD(&Text:td)
 	{
 		TextDrawDestroy(td);
 		td = PBE_NO_TD;
-	}
-}
-
-static stock PBE_KillPlayerTD(playerid, &PlayerText:ptd)
-{
-	if (ptd != PBE_NO_PTD)
-	{
-		PlayerTextDrawDestroy(playerid, ptd);
-		ptd = PBE_NO_PTD;
 	}
 }
 
@@ -913,17 +908,18 @@ static stock PBE_UpdateGridVisibility(playerid, sid)
 	}
 }
 
-static stock PBE_CreateSessionPlayerTDs(playerid, sid)
+static stock PBE_CreateSessionTDs(playerid, sid)
 {
-	PBE_KillPlayerTD(playerid, EditorSession[sid][EP_PTDStatus]);
-	PBE_KillPlayerTD(playerid, EditorSession[sid][EP_PTDHelper]);
+	#pragma unused playerid
+	PBE_KillGlobalTD(EditorSession[sid][EP_TDStatus]);
+	PBE_KillGlobalTD(EditorSession[sid][EP_TDHelper]);
 
 	new dock = EditorSession[sid][EP_DockPos];
 	new Float:statusY = (dock == PBE_DOCK_TOP) ? 6.2 : 412.2;
 	new Float:helperY = (dock == PBE_DOCK_TOP) ? 43.0 : 393.5;
 
-	EditorSession[sid][EP_PTDStatus] = PBE_MakePlayerLabel(playerid, 320.0, statusY, "Progress Bar Plus - Editor", 0.175, 0.86);
-	EditorSession[sid][EP_PTDHelper] = PBE_MakePlayerLabel(playerid, 320.0, helperY, "_", 0.175, 0.88);
+	EditorSession[sid][EP_TDStatus] = PBE_MakeSessionLabel(320.0, statusY, "Progress Bar Plus - Editor", 0.175, 0.86);
+	EditorSession[sid][EP_TDHelper] = PBE_MakeSessionLabel(320.0, helperY, "_", 0.175, 0.88);
 }
 
 static stock PBE_HideAllDockTDs(playerid, sid)
@@ -940,8 +936,8 @@ static stock PBE_HideAllDockTDs(playerid, sid)
 	}
 	if (g_TD_MiniPillBg != PBE_NO_TD) TextDrawHideForPlayer(playerid, g_TD_MiniPillBg);
 	if (g_TD_MiniPillLbl != PBE_NO_TD) TextDrawHideForPlayer(playerid, g_TD_MiniPillLbl);
-	if (EditorSession[sid][EP_PTDStatus] != PBE_NO_PTD) PlayerTextDrawHide(playerid, EditorSession[sid][EP_PTDStatus]);
-	if (EditorSession[sid][EP_PTDHelper] != PBE_NO_PTD) PlayerTextDrawHide(playerid, EditorSession[sid][EP_PTDHelper]);
+	if (EditorSession[sid][EP_TDStatus] != PBE_NO_TD) TextDrawHideForPlayer(playerid, EditorSession[sid][EP_TDStatus]);
+	if (EditorSession[sid][EP_TDHelper] != PBE_NO_TD) TextDrawHideForPlayer(playerid, EditorSession[sid][EP_TDHelper]);
 }
 
 static stock PBE_RefreshStatusHUD(playerid, sid)
@@ -951,22 +947,21 @@ static stock PBE_RefreshStatusHUD(playerid, sid)
 	new dock = EditorSession[sid][EP_DockPos];
 	if (dock == PBE_DOCK_HIDDEN)
 	{
-		if (EditorSession[sid][EP_PTDStatus] != PBE_NO_PTD) PlayerTextDrawHide(playerid, EditorSession[sid][EP_PTDStatus]);
+		if (EditorSession[sid][EP_TDStatus] != PBE_NO_TD) TextDrawHideForPlayer(playerid, EditorSession[sid][EP_TDStatus]);
 	}
-	else if (EditorSession[sid][EP_PTDStatus] != PBE_NO_PTD)
+	else if (EditorSession[sid][EP_TDStatus] != PBE_NO_TD)
 	{
-		new stateTag[12];
+		new stateTag[24];
 		if (EditorSession[sid][EP_Dirty])
 		{
-			PBE_PTDColor(playerid, EditorSession[sid][EP_PTDStatus], 0xF97316FF);
-			format(stateTag, sizeof stateTag, "[Unsaved]");
+			format(stateTag, sizeof stateTag, "~y~[Unsaved]~w~");
 		}
 		else
 		{
-			PBE_PTDColor(playerid, EditorSession[sid][EP_PTDStatus], 0x10B981FF);
-			format(stateTag, sizeof stateTag, "[Saved]");
+			format(stateTag, sizeof stateTag, "~g~~h~[Saved]~w~");
 		}
 
+		new usedTDs = PB_GetUsedPlayerTextDraws(playerid);
 		new line[256];
 		if (PBE_HasActiveBar(sid))
 		{
@@ -974,11 +969,12 @@ static stock PBE_RefreshStatusHUD(playerid, sid)
 			new stName[12];
 			PBE_GetStyleShort(EditorBars[sid][s][EBar_Style], stName);
 			format(line, sizeof line,
-				"%s~b~~h~%s ~w~(%d/%d)   ~y~#%d %s ~w~(%s)   Pos: ~g~~h~%.1f, %.1f~w~   Size: ~g~~h~%.1f x %.1f~w~   Val: ~b~~h~%.0f/%.0f",
+				"%s ~b~~h~%s ~w~(%d/%d - ~p~%d/256 TD~w~)   ~y~#%d %s ~w~(%s)   Pos: ~g~~h~%.1f, %.1f~w~   Size: ~g~~h~%.1f x %.1f~w~   Val: ~b~~h~%.0f/%.0f",
 				stateTag,
 				EditorSession[sid][EP_ProjectName],
 				EditorSession[sid][EP_BarCount],
 				PBE_MAX_BARS,
+				usedTDs,
 				s + 1,
 				EditorBars[sid][s][EBar_Name],
 				stName,
@@ -993,24 +989,25 @@ static stock PBE_RefreshStatusHUD(playerid, sid)
 		else
 		{
 			format(line, sizeof line,
-				"%s~b~~h~%s ~w~(0/%d Bars) - ~y~Click ~w~+ CREATE ~y~to add a bar or ~w~PROJECT ~y~to open/import",
+				"%s ~b~~h~%s ~w~(0/%d Bars - ~p~%d/256 TD~w~) - ~y~Click ~w~+ CREATE ~y~to add a bar or ~w~PROJECT ~y~to open/import",
 				stateTag,
 				EditorSession[sid][EP_ProjectName],
-				PBE_MAX_BARS
+				PBE_MAX_BARS,
+				usedTDs
 			);
 		}
-		PlayerTextDrawSetString(playerid, EditorSession[sid][EP_PTDStatus], line);
-		PlayerTextDrawShow(playerid, EditorSession[sid][EP_PTDStatus]);
+		TextDrawSetString(EditorSession[sid][EP_TDStatus], line);
+		TextDrawShowForPlayer(playerid, EditorSession[sid][EP_TDStatus]);
 	}
 
 	new mode = EditorSession[sid][EP_EditMode];
 	if (mode == PBE_MODE_NONE || !PBE_HasActiveBar(sid))
 	{
-		if (EditorSession[sid][EP_PTDHelper] != PBE_NO_PTD) PlayerTextDrawHide(playerid, EditorSession[sid][EP_PTDHelper]);
+		if (EditorSession[sid][EP_TDHelper] != PBE_NO_TD) TextDrawHideForPlayer(playerid, EditorSession[sid][EP_TDHelper]);
 		return;
 	}
 
-	if (EditorSession[sid][EP_PTDHelper] != PBE_NO_PTD)
+	if (EditorSession[sid][EP_TDHelper] != PBE_NO_TD)
 	{
 		new helper[256], s = EditorSession[sid][EP_Selected];
 		new lockTag[8];
@@ -1068,8 +1065,8 @@ static stock PBE_RefreshStatusHUD(playerid, sid)
 				EditorBars[sid][s][EBar_Max]
 			);
 		}
-		PlayerTextDrawSetString(playerid, EditorSession[sid][EP_PTDHelper], helper);
-		PlayerTextDrawShow(playerid, EditorSession[sid][EP_PTDHelper]);
+		TextDrawSetString(EditorSession[sid][EP_TDHelper], helper);
+		TextDrawShowForPlayer(playerid, EditorSession[sid][EP_TDHelper]);
 	}
 }
 
@@ -1078,7 +1075,7 @@ static stock PBE_RenderEditorDock(playerid, sid)
 	PBE_HideAllDockTDs(playerid, sid);
 	if (!EditorSession[sid][EP_Active]) return;
 
-	PBE_CreateSessionPlayerTDs(playerid, sid);
+	PBE_CreateSessionTDs(playerid, sid);
 	new dock = EditorSession[sid][EP_DockPos];
 	if (dock == PBE_DOCK_HIDDEN)
 	{
@@ -1177,6 +1174,8 @@ static stock bool:PBE_SpawnSlotHandle(playerid, sid, slot)
 			EditorBars[sid][slot][EBar_LabelOffsetY]
 		);
 		SetPlayerProgressBarLabelAutoScale(playerid, handle, EditorBars[sid][slot][EBar_LabelAutoScale]);
+		SetPlayerProgressBarLabelFollowColour(playerid, handle, EditorBars[sid][slot][EBar_LabelFollowCol]);
+		SetPlayerProgressBarLabelOrientation(playerid, handle, EditorBars[sid][slot][EBar_LabelOrient]);
 	}
 
 	if (EditorBars[sid][slot][EBar_Visible]) ShowPlayerProgressBar(playerid, handle);
@@ -1308,6 +1307,16 @@ static stock PBE_AddNewBar(playerid, sid, style = PB_STYLE_BAR)
 		return -1;
 	}
 
+	new neededTDs = PB_GetBarRequiredTextDraws(style, PB_RING_SEGMENTS, false);
+	new freeTDs = PB_GetFreePlayerTextDraws(playerid);
+	if (freeTDs < neededTDs + PB_TD_SAFETY_HEADROOM)
+	{
+		new err[128];
+		format(err, sizeof err, "PlayerTextDraw limit reached (256 max). Needed: %d, Available: %d.", neededTDs, freeTDs);
+		PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Allocation Failed: ", err);
+		return -1;
+	}
+
 	PBE_SaveUndo(sid, "Create Bar Layer");
 
 	new slot = count;
@@ -1366,6 +1375,8 @@ static stock PBE_AddNewBar(playerid, sid, style = PB_STYLE_BAR)
 	EditorBars[sid][slot][EBar_BlinkBorderColor] = 0;
 	EditorBars[sid][slot][EBar_LabelShow]        = false;
 	EditorBars[sid][slot][EBar_LabelAutoScale]   = true;
+	EditorBars[sid][slot][EBar_LabelFollowCol]   = false;
+	EditorBars[sid][slot][EBar_LabelOrient]      = PB_LABEL_ORIENT_AUTO;
 	format(EditorBars[sid][slot][EBar_LabelText], 32, "{PERCENT}%%");
 	EditorBars[sid][slot][EBar_LabelColor]       = 0xFFFFFFFF;
 	EditorBars[sid][slot][EBar_LabelFont]        = 1;
@@ -1403,6 +1414,16 @@ static stock PBE_DuplicateBarLayer(playerid, sid, srcSlot)
 	if (count >= PBE_MAX_BARS)
 	{
 		PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Limit Reached: ", "Cannot duplicate; maximum 20 bar layers reached.");
+		return -1;
+	}
+
+	new neededTDs = PB_GetBarRequiredTextDraws(EditorBars[sid][srcSlot][EBar_Style], EditorBars[sid][srcSlot][EBar_Segments], EditorBars[sid][srcSlot][EBar_LabelShow]);
+	new freeTDs = PB_GetFreePlayerTextDraws(playerid);
+	if (freeTDs < neededTDs + PB_TD_SAFETY_HEADROOM)
+	{
+		new err[128];
+		format(err, sizeof err, "PlayerTextDraw limit reached (256 max). Needed: %d, Available: %d.", neededTDs, freeTDs);
+		PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Allocation Failed: ", err);
 		return -1;
 	}
 
@@ -1532,6 +1553,8 @@ static stock PBE_StartTransformMode(playerid, sid, mode)
 	EditorSession[sid][EP_OrigH]      = EditorBars[sid][s][EBar_H];
 	EditorSession[sid][EP_OrigBorder] = EditorBars[sid][s][EBar_Border];
 	EditorSession[sid][EP_OrigVal]    = EditorBars[sid][s][EBar_Val];
+	EditorSession[sid][EP_LastRingRebuild]    = 0;
+	EditorSession[sid][EP_RingPendingRebuild] = false;
 
 	if (mode == PBE_MODE_RESIZE)
 	{
@@ -1587,6 +1610,16 @@ static stock PBE_StopTransformMode(playerid, sid, bool:revertChanges, bool:resto
 		}
 		else
 		{
+			if (IsValidPlayerProgressBar(playerid, h) && EditorBars[sid][s][EBar_Style] == PB_STYLE_RING && EditorSession[sid][EP_RingPendingRebuild])
+			{
+				EditorSession[sid][EP_RingPendingRebuild] = false;
+				switch (prevMode)
+				{
+					case PBE_MODE_MOVE:   SetPlayerProgressBarPos(playerid, h, EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
+					case PBE_MODE_RESIZE: SetPlayerProgressBarSize(playerid, h, EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
+					case PBE_MODE_BORDER: SetPlayerProgressBarBorder(playerid, h, EditorBars[sid][s][EBar_Border]);
+				}
+			}
 			EditorSession[sid][EP_Dirty] = true;
 		}
 	}
@@ -1614,6 +1647,14 @@ public PBE_TransformTick(playerid)
 		return 0;
 	}
 
+	new mode = EditorSession[sid][EP_EditMode];
+	new s = EditorSession[sid][EP_Selected];
+	new h = EditorBars[sid][s][EBar_Handle];
+	if (!IsValidPlayerProgressBar(playerid, h)) return 1;
+
+	new bool:isRing = (EditorBars[sid][s][EBar_Style] == PB_STYLE_RING);
+	new now = GetTickCount();
+
 	new PBE_KEY_TAG keys, updown, leftright;
 	GetPlayerKeys(playerid, keys, updown, leftright);
 
@@ -1635,18 +1676,33 @@ public PBE_TransformTick(playerid)
 	if (updown < 0) dy -= step;
 	else if (updown > 0) dy += step;
 
-	if (dx == 0.0 && dy == 0.0) return 1;
-
-	new mode = EditorSession[sid][EP_EditMode];
-	new s = EditorSession[sid][EP_Selected];
-	new h = EditorBars[sid][s][EBar_Handle];
-	if (!IsValidPlayerProgressBar(playerid, h)) return 1;
-
-	new bool:isRing = (EditorBars[sid][s][EBar_Style] == PB_STYLE_RING);
-	new now = GetTickCount();
-	if (isRing && mode != PBE_MODE_SCRUB && (now - EditorSession[sid][EP_LastRingRebuild] < PBE_RING_THROTTLE_MS))
+	if (dx == 0.0 && dy == 0.0)
 	{
+		if (isRing && EditorSession[sid][EP_RingPendingRebuild])
+		{
+			EditorSession[sid][EP_RingPendingRebuild] = false;
+			EditorSession[sid][EP_LastRingRebuild] = now;
+			switch (mode)
+			{
+				case PBE_MODE_MOVE:   SetPlayerProgressBarPos(playerid, h, EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
+				case PBE_MODE_RESIZE: SetPlayerProgressBarSize(playerid, h, EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
+				case PBE_MODE_BORDER: SetPlayerProgressBarBorder(playerid, h, EditorBars[sid][s][EBar_Border]);
+			}
+		}
 		return 1;
+	}
+
+	new bool:canRebuild = true;
+	if (isRing && mode != PBE_MODE_SCRUB)
+	{
+		new throttleMs = 70;
+		new segs = EditorBars[sid][s][EBar_Segments];
+		if (segs >= 45) throttleMs = 200;
+		else if (segs >= 30) throttleMs = 120;
+		if (now - EditorSession[sid][EP_LastRingRebuild] < throttleMs)
+		{
+			canRebuild = false;
+		}
 	}
 
 	if (mode == PBE_MODE_MOVE)
@@ -1666,8 +1722,16 @@ public PBE_TransformTick(playerid)
 		EditorBars[sid][s][EBar_X] = snappedX;
 		EditorBars[sid][s][EBar_Y] = snappedY;
 
-		SetPlayerProgressBarPos(playerid, h, snappedX, snappedY);
-		if (isRing) EditorSession[sid][EP_LastRingRebuild] = now;
+		if (canRebuild)
+		{
+			SetPlayerProgressBarPos(playerid, h, snappedX, snappedY);
+			if (isRing) EditorSession[sid][EP_LastRingRebuild] = now;
+			EditorSession[sid][EP_RingPendingRebuild] = false;
+		}
+		else
+		{
+			EditorSession[sid][EP_RingPendingRebuild] = true;
+		}
 	}
 	else if (mode == PBE_MODE_RESIZE)
 	{
@@ -1694,8 +1758,16 @@ public PBE_TransformTick(playerid)
 		EditorBars[sid][s][EBar_W] = nw;
 		EditorBars[sid][s][EBar_H] = nh;
 
-		SetPlayerProgressBarSize(playerid, h, nw, nh);
-		if (isRing) EditorSession[sid][EP_LastRingRebuild] = now;
+		if (canRebuild)
+		{
+			SetPlayerProgressBarSize(playerid, h, nw, nh);
+			if (isRing) EditorSession[sid][EP_LastRingRebuild] = now;
+			EditorSession[sid][EP_RingPendingRebuild] = false;
+		}
+		else
+		{
+			EditorSession[sid][EP_RingPendingRebuild] = true;
+		}
 	}
 	else if (mode == PBE_MODE_BORDER)
 	{
@@ -1705,8 +1777,16 @@ public PBE_TransformTick(playerid)
 		if (nb > PB_BORDER_MAX) nb = PB_BORDER_MAX;
 		EditorBars[sid][s][EBar_Border] = nb;
 
-		SetPlayerProgressBarBorder(playerid, h, nb);
-		if (isRing) EditorSession[sid][EP_LastRingRebuild] = now;
+		if (canRebuild)
+		{
+			SetPlayerProgressBarBorder(playerid, h, nb);
+			if (isRing) EditorSession[sid][EP_LastRingRebuild] = now;
+			EditorSession[sid][EP_RingPendingRebuild] = false;
+		}
+		else
+		{
+			EditorSession[sid][EP_RingPendingRebuild] = true;
+		}
 	}
 	else if (mode == PBE_MODE_SCRUB)
 	{
@@ -1722,12 +1802,6 @@ public PBE_TransformTick(playerid)
 	PBE_RefreshStatusHUD(playerid, sid);
 	return 1;
 }
-
-/*
-================================================================================
-    7. File System: Index Registry, Save/Load (.pbp/.pbt), Import & Export
-================================================================================
-*/
 
 static stock PBE_ReadIndexEntries(const indexPath[], const folder[], const ext[], outList[][PBE_MAX_PROJECT_NAME], maxItems = PBE_MAX_INDEX_ITEMS)
 {
@@ -1854,12 +1928,14 @@ static stock PBE_WriteBarKVBlock(File:fp, sid, slot)
 			EditorBars[sid][slot][EBar_LabelAlign]
 		);
 		fwrite(fp, line);
-		format(line, sizeof line, "LabelScaleX=%.4f\r\nLabelScaleY=%.4f\r\nLabelOffsetX=%.4f\r\nLabelOffsetY=%.4f\r\nLabelAutoScale=%d\r\n",
+		format(line, sizeof line, "LabelScaleX=%.4f\r\nLabelScaleY=%.4f\r\nLabelOffsetX=%.4f\r\nLabelOffsetY=%.4f\r\nLabelAutoScale=%d\r\nLabelFollowCol=%d\r\nLabelOrient=%d\r\n",
 			EditorBars[sid][slot][EBar_LabelScaleX],
 			EditorBars[sid][slot][EBar_LabelScaleY],
 			EditorBars[sid][slot][EBar_LabelOffsetX],
 			EditorBars[sid][slot][EBar_LabelOffsetY],
-			EditorBars[sid][slot][EBar_LabelAutoScale] ? 1 : 0
+			EditorBars[sid][slot][EBar_LabelAutoScale] ? 1 : 0,
+			EditorBars[sid][slot][EBar_LabelFollowCol] ? 1 : 0,
+			EditorBars[sid][slot][EBar_LabelOrient]
 		);
 		fwrite(fp, line);
 	}
@@ -1904,6 +1980,8 @@ static stock PBE_InitDefaultBarStruct(bar[E_PBE_BAR])
 	bar[EBar_BlinkBorderColor] = 0;
 	bar[EBar_LabelShow]        = false;
 	bar[EBar_LabelAutoScale]   = true;
+	bar[EBar_LabelFollowCol]   = false;
+	bar[EBar_LabelOrient]      = PB_LABEL_ORIENT_AUTO;
 	format(bar[EBar_LabelText], 32, "{PERCENT}%%");
 	bar[EBar_LabelColor]       = 0xFFFFFFFF;
 	bar[EBar_LabelFont]        = 1;
@@ -1953,6 +2031,8 @@ static stock PBE_ApplyKVToBarStruct(bar[E_PBE_BAR], const key[], const val[])
 	else if (!strcmp(key, "LabelOffsetX", true)) bar[EBar_LabelOffsetX] = floatstr(val);
 	else if (!strcmp(key, "LabelOffsetY", true)) bar[EBar_LabelOffsetY] = floatstr(val);
 	else if (!strcmp(key, "LabelAutoScale", true)) bar[EBar_LabelAutoScale] = (strval(val) != 0);
+	else if (!strcmp(key, "LabelFollowCol", true)) bar[EBar_LabelFollowCol] = (strval(val) != 0);
+	else if (!strcmp(key, "LabelOrient", true)) bar[EBar_LabelOrient] = strval(val);
 	else if (!strcmp(key, "Gradient", true)) bar[EBar_Gradient] = (strval(val) != 0);
 	else if (!strcmp(key, "GradInvert", true)) bar[EBar_GradInvert] = (strval(val) != 0);
 	else if (!strcmp(key, "GradEmpty", true))
@@ -2014,7 +2094,7 @@ static stock bool:PBE_SaveProjectFile(playerid, sid, const projName[])
 	new line[256];
 	fwrite(fp, "; ============================================================================\r\n");
 	fwrite(fp, "; Progress Bar Plus - Editor Project File (.pbp)\r\n");
-	fwrite(fp, "; Format Version: 2.1.0\r\n");
+	fwrite(fp, "; Format Version: " PBE_VERSION "\r\n");
 	fwrite(fp, "; ============================================================================\r\n\r\n");
 
 	fwrite(fp, "[Project]\r\n");
@@ -2168,44 +2248,106 @@ static stock bool:PBE_LoadTemplateFile(playerid, sid, const tplName[])
 
 	PBE_SaveUndo(sid, "Spawn From Template");
 
-	new slot = EditorSession[sid][EP_BarCount];
-	PBE_InitDefaultBarStruct(EditorBars[sid][slot]);
-
 	new line[256], trimmed[256], key[48], val[160];
+	new initialBarCount = EditorSession[sid][EP_BarCount];
+	new currentSlot = initialBarCount;
+	new loadedBars = 0;
+	new bool:multiSection = false;
+
+	PBE_InitDefaultBarStruct(EditorBars[sid][currentSlot]);
+
 	while (fread(fp, line, sizeof line))
 	{
 		PBE_Trim(line, trimmed, sizeof trimmed);
-		if (trimmed[0] == '\0' || trimmed[0] == ';' || trimmed[0] == '#' || trimmed[0] == '[') continue;
+		if (trimmed[0] == '\0' || trimmed[0] == ';' || trimmed[0] == '#') continue;
+
+		if (trimmed[0] == '[')
+		{
+			if (!strcmp(trimmed, "[Bar_", true, 5) || !strcmp(trimmed, "[Template_", true, 10))
+			{
+				if (!multiSection && loadedBars == 0)
+				{
+					multiSection = true;
+					currentSlot = initialBarCount;
+					PBE_InitDefaultBarStruct(EditorBars[sid][currentSlot]);
+					EditorSession[sid][EP_BarCount]++;
+					loadedBars++;
+				}
+				else
+				{
+					multiSection = true;
+					if (EditorSession[sid][EP_BarCount] < PBE_MAX_BARS)
+					{
+						currentSlot = EditorSession[sid][EP_BarCount];
+						PBE_InitDefaultBarStruct(EditorBars[sid][currentSlot]);
+						EditorSession[sid][EP_BarCount]++;
+						loadedBars++;
+					}
+					else
+					{
+						currentSlot = -1;
+					}
+				}
+			}
+			continue;
+		}
+
 		new eq = strfind(trimmed, "=");
 		if (eq <= 0) continue;
+
 		strmid(key, trimmed, 0, eq, sizeof key);
 		strmid(val, trimmed, eq + 1, strlen(trimmed), sizeof val);
 		PBE_Trim(key, key, sizeof key);
 		PBE_Trim(val, val, sizeof val);
-		PBE_ApplyKVToBarStruct(EditorBars[sid][slot], key, val);
+
+		if (currentSlot >= 0)
+		{
+			PBE_ApplyKVToBarStruct(EditorBars[sid][currentSlot], key, val);
+		}
 	}
 	fclose(fp);
 
-	new uniq[PBE_MAX_NAME];
-	EditorBars[sid][slot][EBar_Used] = false;
-	PBE_GenerateUniqueBarName(sid, EditorBars[sid][slot][EBar_Name], uniq, sizeof uniq);
-	EditorBars[sid][slot][EBar_Used] = true;
-	format(EditorBars[sid][slot][EBar_Name], PBE_MAX_NAME, "%s", uniq);
+	if (!multiSection)
+	{
+		EditorSession[sid][EP_BarCount]++;
+		loadedBars = 1;
+	}
 
-	EditorSession[sid][EP_BarCount]++;
-	EditorSession[sid][EP_Selected] = slot;
+	new bool:anyFailed = false;
+	for (new s = initialBarCount; s < initialBarCount + loadedBars; s++)
+	{
+		new uniq[PBE_MAX_NAME];
+		EditorBars[sid][s][EBar_Used] = false;
+		PBE_GenerateUniqueBarName(sid, EditorBars[sid][s][EBar_Name], uniq, sizeof uniq);
+		EditorBars[sid][s][EBar_Used] = true;
+		format(EditorBars[sid][s][EBar_Name], PBE_MAX_NAME, "%s", uniq);
+
+		new neededTDs = PB_GetBarRequiredTextDraws(EditorBars[sid][s][EBar_Style], EditorBars[sid][s][EBar_Segments], EditorBars[sid][s][EBar_LabelShow]);
+		if (!PB_CanAllocatePlayerTextDraws(playerid, neededTDs + PB_TD_SAFETY_HEADROOM) || !PBE_SpawnSlotHandle(playerid, sid, s))
+		{
+			anyFailed = true;
+			for (new r = s; r < initialBarCount + loadedBars; r++)
+			{
+				EditorBars[sid][r][EBar_Used] = false;
+			}
+			EditorSession[sid][EP_BarCount] = s;
+			break;
+		}
+	}
+
+	if (EditorSession[sid][EP_BarCount] > initialBarCount)
+	{
+		EditorSession[sid][EP_Selected] = EditorSession[sid][EP_BarCount] - 1;
+	}
 	EditorSession[sid][EP_Dirty] = true;
 
-	if (!PBE_SpawnSlotHandle(playerid, sid, slot))
+	if (anyFailed)
 	{
-		EditorBars[sid][slot][EBar_Used] = false;
-		EditorSession[sid][EP_BarCount]--;
-		PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Allocation Failed: ", "PlayerTextDraw limit reached!");
-		return false;
+		PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Allocation Stopped: ", "PlayerTextDraw limit reached for remaining bars!");
 	}
 
 	PBE_RenderEditorDock(playerid, sid);
-	return true;
+	return (loadedBars > 0);
 }
 
 static stock Float:PBE_ParseTaggedFloat(const token[], Float:fallback)
@@ -2504,7 +2646,7 @@ static stock bool:PBE_ExportProjectCode(sid, const outName[], formatType, outPat
 
 	fwrite(fp, "/*\r\n");
 	fwrite(fp, "================================================================================\r\n");
-	fwrite(fp, "    Generated by Progress Bar Plus - Editor v2.1.0\r\n");
+	fwrite(fp, "    Generated by Progress Bar Plus - Editor v" PBE_VERSION "\r\n");
 	format(s_OutLine, sizeof s_OutLine, "    Project:     %s\r\n    Total Bars:  %d\r\n", cleanName, count);
 	fwrite(fp, s_OutLine);
 	fwrite(fp, "    Repository:  https://github.com/Walter-Correa/Progress-Bar-Plus\r\n");
@@ -2572,12 +2714,57 @@ static stock bool:PBE_ExportProjectCode(sid, const outName[], formatType, outPat
 					EditorBars[sid][i][EBar_LabelOffsetY]
 				);
 				fwrite(fp, s_OutLine);
+				if (EditorBars[sid][i][EBar_LabelFollowCol])
+				{
+					format(s_OutLine, sizeof s_OutLine, "SetPlayerProgressBarLabelFollowColour(playerid, %s[playerid], true);\r\n", EditorBars[sid][i][EBar_Name]);
+					fwrite(fp, s_OutLine);
+				}
+				if (EditorBars[sid][i][EBar_LabelOrient] != PB_LABEL_ORIENT_AUTO)
+				{
+					format(s_OutLine, sizeof s_OutLine, "SetPlayerProgressBarLabelOrientation(playerid, %s[playerid], %d);\r\n", EditorBars[sid][i][EBar_Name], EditorBars[sid][i][EBar_LabelOrient]);
+					fwrite(fp, s_OutLine);
+				}
 			}
 			if (EditorBars[sid][i][EBar_Visible])
 			{
-				format(s_OutLine, sizeof s_OutLine, "ShowPlayerProgressBar(playerid, %s[playerid]);\r\n\r\n", EditorBars[sid][i][EBar_Name]);
+				format(s_OutLine, sizeof s_OutLine, "ShowPlayerProgressBar(playerid, %s[playerid]);\r\n", EditorBars[sid][i][EBar_Name]);
 				fwrite(fp, s_OutLine);
 			}
+			if (EditorBars[sid][i][EBar_Gradient])
+			{
+				new hexGE[16], hexGM[16], hexGF[16];
+				PBE_FormatHex(EditorBars[sid][i][EBar_GradEmpty], hexGE);
+				PBE_FormatHex(EditorBars[sid][i][EBar_GradMid], hexGM);
+				PBE_FormatHex(EditorBars[sid][i][EBar_GradFull], hexGF);
+				if (EditorBars[sid][i][EBar_GradInvert])
+				{
+					format(s_OutLine, sizeof s_OutLine, "SetPlayerProgressBarGradient(playerid, %s[playerid], true, %s, %s, %s, true);\r\n", EditorBars[sid][i][EBar_Name], hexGE, hexGF, hexGM);
+				}
+				else
+				{
+					format(s_OutLine, sizeof s_OutLine, "SetPlayerProgressBarGradient(playerid, %s[playerid], true, %s, %s, %s);\r\n", EditorBars[sid][i][EBar_Name], hexGE, hexGF, hexGM);
+				}
+				fwrite(fp, s_OutLine);
+			}
+			if (EditorBars[sid][i][EBar_AutoFill])
+			{
+				format(s_OutLine, sizeof s_OutLine, "AutoFillPlayerProgressBar(playerid, %s[playerid], %.2f);\r\n", EditorBars[sid][i][EBar_Name], EditorBars[sid][i][EBar_AutoFillMax]);
+				fwrite(fp, s_OutLine);
+			}
+			if (EditorBars[sid][i][EBar_Blinking])
+			{
+				PBE_FormatHex(EditorBars[sid][i][EBar_BlinkColor], hexBlCol);
+				PBE_FormatHex(EditorBars[sid][i][EBar_BlinkBorderColor], hexBlBCol);
+				format(s_OutLine, sizeof s_OutLine, "BlinkPlayerProgressBar(playerid, %s[playerid], %d, %d, %s, %s);\r\n",
+					EditorBars[sid][i][EBar_Name],
+					EditorBars[sid][i][EBar_BlinkInterval],
+					EditorBars[sid][i][EBar_BlinkDuration],
+					hexBlCol,
+					hexBlBCol
+				);
+				fwrite(fp, s_OutLine);
+			}
+			fwrite(fp, "\r\n");
 		}
 		fclose(fp);
 		return true;
@@ -2627,6 +2814,16 @@ static stock bool:PBE_ExportProjectCode(sid, const outName[], formatType, outPat
 				EditorBars[sid][i][EBar_LabelOffsetY]
 			);
 			fwrite(fp, s_OutLine);
+			if (EditorBars[sid][i][EBar_LabelFollowCol])
+			{
+				format(s_OutLine, sizeof s_OutLine, "\tSetPlayerProgressBarLabelFollowColour(playerid, %s[playerid], true);\r\n", EditorBars[sid][i][EBar_Name]);
+				fwrite(fp, s_OutLine);
+			}
+			if (EditorBars[sid][i][EBar_LabelOrient] != PB_LABEL_ORIENT_AUTO)
+			{
+				format(s_OutLine, sizeof s_OutLine, "\tSetPlayerProgressBarLabelOrientation(playerid, %s[playerid], %d);\r\n", EditorBars[sid][i][EBar_Name], EditorBars[sid][i][EBar_LabelOrient]);
+				fwrite(fp, s_OutLine);
+			}
 		}
 
 		if (EditorBars[sid][i][EBar_Visible])
@@ -3037,6 +3234,8 @@ static stock PBE_SyncLabel(playerid, sid, slot)
 		EditorBars[sid][slot][EBar_LabelOffsetY]
 	);
 	SetPlayerProgressBarLabelAutoScale(playerid, h, EditorBars[sid][slot][EBar_LabelAutoScale]);
+	SetPlayerProgressBarLabelFollowColour(playerid, h, EditorBars[sid][slot][EBar_LabelFollowCol]);
+	SetPlayerProgressBarLabelOrientation(playerid, h, EditorBars[sid][slot][EBar_LabelOrient]);
 }
 
 static stock PBE_OpenLabelMenu(playerid, sid)
@@ -3050,6 +3249,9 @@ static stock PBE_OpenLabelMenu(playerid, sid)
 	new hexCol[16], rgbTag[16];
 	PBE_FormatHex(EditorBars[sid][s][EBar_LabelColor], hexCol);
 	PBE_FormatRGBTag(EditorBars[sid][s][EBar_LabelColor], rgbTag);
+
+	new followTag[24];
+	PBE_OnOffTag(EditorBars[sid][s][EBar_LabelFollowCol], followTag);
 
 	new alignName[16];
 	if (EditorBars[sid][s][EBar_LabelAlign] == 1) format(alignName, sizeof alignName, "Left (1)");
@@ -3067,7 +3269,17 @@ static stock PBE_OpenLabelMenu(playerid, sid)
 
 	strcat(s_DlgBody, "{38BDF8}Quick Template Presets\t{94A3B8}{PERCENT}%, {VAL}/{MAX}, HP, etc.\n", sizeof s_DlgBody);
 
-	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Text Color (Palette / Hex)\t%s|||| {FFFFFF}%s\n", rgbTag, hexCol);
+	if (EditorBars[sid][s][EBar_LabelFollowCol])
+	{
+		format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Text Color (Palette / Hex)\t{10B981}Match Bar Color (Auto)\n");
+	}
+	else
+	{
+		format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Text Color (Palette / Hex)\t%s|||| {FFFFFF}%s\n", rgbTag, hexCol);
+	}
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{38BDF8}Sync Color with Bar / Gradient\t%s\n", followTag);
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
 	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Font Style\t{94A3B8}Font %d\n", EditorBars[sid][s][EBar_LabelFont]);
@@ -3436,7 +3648,7 @@ static stock PBE_OpenViewMenu(playerid, sid)
 static stock PBE_OpenHelpGuide(playerid)
 {
 	s_DlgBody[0] = '\0';
-	strcat(s_DlgBody, "{38BDF8}Progress Bar Plus - Editor v2.1.0\n", sizeof s_DlgBody);
+	strcat(s_DlgBody, "{38BDF8}Progress Bar Plus - Editor v" PBE_VERSION "\n", sizeof s_DlgBody);
 	strcat(s_DlgBody, "{94A3B8}----------------------------------------------------------------------\n\n", sizeof s_DlgBody);
 
 	strcat(s_DlgBody, "{10B981}1. Interactive Editor Cursor & Free-Walk Mode\n", sizeof s_DlgBody);
@@ -3582,8 +3794,8 @@ static stock bool:PBE_OpenEditorSession(playerid)
 	EditorSession[sid][EP_RelPendingAct]   = 0;
 	EditorSession[sid][EP_DeleteTargetIdx] = -1;
 	EditorSession[sid][EP_LastRingRebuild] = 0;
-	EditorSession[sid][EP_PTDStatus]       = PBE_NO_PTD;
-	EditorSession[sid][EP_PTDHelper]       = PBE_NO_PTD;
+	EditorSession[sid][EP_TDStatus]        = PBE_NO_TD;
+	EditorSession[sid][EP_TDHelper]        = PBE_NO_TD;
 	PBE_MakeUniqueBlankName(sid, EditorSession[sid][EP_ProjectName], PBE_MAX_PROJECT_NAME);
 
 	EditorUndoMeta[sid][EUndo_Available] = false;
@@ -3596,7 +3808,7 @@ static stock bool:PBE_OpenEditorSession(playerid)
 	PBE_RenderEditorDock(playerid, sid);
 	PBE_SetCursor(playerid, sid, true);
 
-	PBE_SendMsg(playerid, PBE_CHAT_OK, "{10B981}Editor Ready: ", "Welcome to {38BDF8}Progress Bar Plus - Editor v2.1.0{FFFFFF}!");
+	PBE_SendMsg(playerid, PBE_CHAT_OK, "{10B981}Editor Ready: ", "Welcome to {38BDF8}Progress Bar Plus - Editor v" PBE_VERSION "{FFFFFF}!");
 	PBE_SendMsg(playerid, PBE_CHAT_INFO, "", "Use {38BDF8}+ CREATE{FFFFFF} to add, {38BDF8}PROJECT{FFFFFF} to open/save, or {F59E0B}ESC / Y{FFFFFF} for cursor.");
 	return true;
 }
@@ -3619,10 +3831,10 @@ static stock PBE_CloseEditorSession(playerid, sid, bool:disconnecting = false)
 		EditorSession[sid][EP_ShowGrid] = false;
 		PBE_UpdateGridVisibility(playerid, sid);
 		PBE_HideAllDockTDs(playerid, sid);
-
-		PBE_KillPlayerTD(playerid, EditorSession[sid][EP_PTDStatus]);
-		PBE_KillPlayerTD(playerid, EditorSession[sid][EP_PTDHelper]);
 	}
+
+	PBE_KillGlobalTD(EditorSession[sid][EP_TDStatus]);
+	PBE_KillGlobalTD(EditorSession[sid][EP_TDHelper]);
 
 	EditorSession[sid][EP_Active]    = false;
 	EditorSession[sid][EP_PlayerID]  = INVALID_PLAYER_ID;
@@ -3630,9 +3842,15 @@ static stock PBE_CloseEditorSession(playerid, sid, bool:disconnecting = false)
 	EditorSession[sid][EP_EditMode]  = PBE_MODE_NONE;
 	EditorSession[sid][EP_BarCount]  = 0;
 	EditorSession[sid][EP_Selected]  = -1;
-	EditorSession[sid][EP_PTDStatus] = PBE_NO_PTD;
-	EditorSession[sid][EP_PTDHelper] = PBE_NO_PTD;
+	EditorSession[sid][EP_TDStatus] = PBE_NO_TD;
+	EditorSession[sid][EP_TDHelper] = PBE_NO_TD;
 	EditorUndoMeta[sid][EUndo_Available] = false;
+
+	for (new i = 0; i < PBE_MAX_BARS; i++)
+	{
+		EditorBars[sid][i][EBar_Used]   = false;
+		EditorBars[sid][i][EBar_Handle] = INVALID_PLAYER_BAR_ID;
+	}
 
 	if (0 <= playerid < MAX_PLAYERS)
 	{
@@ -3657,8 +3875,8 @@ public OnFilterScriptInit()
 	{
 		EditorSession[s][EP_Active]    = false;
 		EditorSession[s][EP_PlayerID]  = INVALID_PLAYER_ID;
-		EditorSession[s][EP_PTDStatus] = PBE_NO_PTD;
-		EditorSession[s][EP_PTDHelper] = PBE_NO_PTD;
+		EditorSession[s][EP_TDStatus] = PBE_NO_TD;
+		EditorSession[s][EP_TDHelper] = PBE_NO_TD;
 		for (new b = 0; b < PBE_MAX_BARS; b++)
 		{
 			EditorBars[s][b][EBar_Used]   = false;
@@ -3669,7 +3887,7 @@ public OnFilterScriptInit()
 	PBE_InitGlobalEditorUI();
 
 	print("======================================================================");
-	print("  Progress Bar Plus - Editor v2.1.0 loaded!");
+	print("  Progress Bar Plus - Editor v" PBE_VERSION " loaded!");
 	print("  Author: Walter Correa | Commands: /pbeditor (/pbe), /pbhelp");
 	print("  Workspace Directory: scriptfiles/Progress Bars/");
 	print("  Repository: https://github.com/Walter-Correa/Progress-Bar-Plus");
@@ -3688,7 +3906,7 @@ public OnFilterScriptExit()
 		}
 	}
 	PBE_DestroyGlobalEditorUI();
-	print("  Progress Bar Plus - Editor v2.1.0 unloaded.");
+	print("  Progress Bar Plus - Editor v" PBE_VERSION " unloaded.");
 	return 1;
 }
 
@@ -4561,7 +4779,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				}
 				case 3:
 				{
-					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter the ring segment scale multiplier ({38BDF8}0.40 to 2.50{FFFFFF}, default 1.00, current: %.2f):", EditorBars[sid][s][EBar_SegScale]);
+					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter the ring segment scale multiplier ({38BDF8}0.10 to 3.00{FFFFFF}, default 1.00, current: %.2f):", EditorBars[sid][s][EBar_SegScale]);
 					PBE_ShowDialog(playerid, PBE_DLG_SEG_SCALE_INPUT, DIALOG_STYLE_INPUT, "{F59E0B}Ring Segment Scale", s_DlgBody, "Apply", "Back");
 				}
 				case 4: PBE_StartTransformMode(playerid, sid, PBE_MODE_BORDER);
@@ -4590,11 +4808,24 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			if (response && PBE_HasActiveBar(sid))
 			{
 				new s = EditorSession[sid][EP_Selected];
-				PBE_SaveUndo(sid, "Change Visual Style");
 				new newStyle = PB_STYLE_BAR;
 				if (listitem == 1) newStyle = PB_STYLE_RING;
 				else if (listitem == 2) newStyle = PB_STYLE_CIRCLE;
 
+				new curNeeded = PB_GetBarRequiredTextDraws(EditorBars[sid][s][EBar_Style], EditorBars[sid][s][EBar_Segments], EditorBars[sid][s][EBar_LabelShow]);
+				new tgtNeeded = PB_GetBarRequiredTextDraws(newStyle, EditorBars[sid][s][EBar_Segments], EditorBars[sid][s][EBar_LabelShow]);
+				new delta = tgtNeeded - curNeeded;
+				new freeTDs = PB_GetFreePlayerTextDraws(playerid);
+				if (delta > 0 && freeTDs < delta + PB_TD_SAFETY_HEADROOM)
+				{
+					new err[128];
+					format(err, sizeof err, "Cannot switch style: Exceeds PlayerTextDraw limit (256). Needed: +%d, Available: %d.", delta, freeTDs);
+					PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Capacity Exceeded: ", err);
+					PBE_OpenStyleMenu(playerid, sid);
+					return 1;
+				}
+
+				PBE_SaveUndo(sid, "Change Visual Style");
 				EditorBars[sid][s][EBar_Style] = newStyle;
 				if (newStyle != PB_STYLE_BAR && EditorBars[sid][s][EBar_H] < 20.0)
 				{
@@ -4605,7 +4836,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				if (IsValidPlayerProgressBar(playerid, EditorBars[sid][s][EBar_Handle]))
 				{
 					SetPlayerProgressBarSize(playerid, EditorBars[sid][s][EBar_Handle], EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
-					SetPlayerProgressBarStyle(playerid, EditorBars[sid][s][EBar_Handle], newStyle);
+					SetPlayerProgressBarStyle(playerid, EditorBars[sid][s][EBar_Handle], newStyle, EditorBars[sid][s][EBar_Segments], EditorBars[sid][s][EBar_SegScale]);
 				}
 				PBE_RefreshStatusHUD(playerid, sid);
 			}
@@ -4643,6 +4874,19 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				if (PB_RING_MIN <= segs <= PB_RING_MAX)
 				{
 					new s = EditorSession[sid][EP_Selected];
+					new curNeeded = PB_GetBarRequiredTextDraws(EditorBars[sid][s][EBar_Style], EditorBars[sid][s][EBar_Segments], EditorBars[sid][s][EBar_LabelShow]);
+					new tgtNeeded = PB_GetBarRequiredTextDraws(EditorBars[sid][s][EBar_Style], segs, EditorBars[sid][s][EBar_LabelShow]);
+					new delta = tgtNeeded - curNeeded;
+					new freeTDs = PB_GetFreePlayerTextDraws(playerid);
+					if (delta > 0 && freeTDs < delta + PB_TD_SAFETY_HEADROOM)
+					{
+						new err[128];
+						format(err, sizeof err, "Cannot set %d segments: Exceeds PlayerTextDraw limit (256). Needed: +%d, Available: %d.", segs, delta, freeTDs);
+						PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Capacity Exceeded: ", err);
+						PBE_OpenStyleMenu(playerid, sid);
+						return 1;
+					}
+
 					PBE_SaveUndo(sid, "Change Ring Segments");
 					EditorBars[sid][s][EBar_Segments] = segs;
 					EditorSession[sid][EP_Dirty] = true;
@@ -4650,6 +4894,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 					{
 						SetPlayerProgressBarStyle(playerid, EditorBars[sid][s][EBar_Handle], EditorBars[sid][s][EBar_Style], segs, EditorBars[sid][s][EBar_SegScale]);
 					}
+					PBE_RefreshStatusHUD(playerid, sid);
 				}
 				else
 				{
@@ -4665,7 +4910,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			if (response && PBE_HasActiveBar(sid))
 			{
 				new Float:sc = floatstr(inputtext);
-				if (0.25 <= sc <= 3.00)
+				if (0.10 <= sc <= 3.00)
 				{
 					new s = EditorSession[sid][EP_Selected];
 					PBE_SaveUndo(sid, "Change Ring Scale");
@@ -4678,7 +4923,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				}
 				else
 				{
-					PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Out of Range: ", "Segment scale must be between 0.25 and 3.00.");
+					PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Out of Range: ", "Segment scale must be between 0.10 and 3.00.");
 				}
 			}
 			PBE_OpenStyleMenu(playerid, sid);
@@ -4690,7 +4935,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			if (response && PBE_HasActiveBar(sid))
 			{
 				new Float:bs = floatstr(inputtext);
-				if (PB_BORDER_MIN <= bs <= PB_BORDER_MAX)
+				if (bs == 0.0 || (PB_BORDER_MIN <= bs <= PB_BORDER_MAX))
 				{
 					new s = EditorSession[sid][EP_Selected];
 					PBE_SaveUndo(sid, "Change Border Size");
@@ -4703,7 +4948,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				}
 				else
 				{
-					PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Out of Range: ", "Border thickness must be between 0.50 and 5.00.");
+					PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Out of Range: ", "Border thickness must be 0.00 (borderless) or between 0.50 and 5.00.");
 				}
 			}
 			PBE_OpenStyleMenu(playerid, sid);
@@ -4809,6 +5054,13 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				case 3: PBE_OpenSwatchPalette(playerid, PBE_DLG_LABEL_COLOR_PAL, "{38BDF8}Select Label Text Color", false);
 				case 4:
 				{
+					EditorBars[sid][s][EBar_LabelFollowCol] = !EditorBars[sid][s][EBar_LabelFollowCol];
+					EditorSession[sid][EP_Dirty] = true;
+					PBE_SyncLabel(playerid, sid, s);
+					PBE_OpenLabelMenu(playerid, sid);
+				}
+				case 5:
+				{
 					s_DlgBody[0] = '\0';
 					strcat(s_DlgBody, "Font Style\tPreview\n", sizeof s_DlgBody);
 					strcat(s_DlgBody, "Font 0\tClassic fixed monospace\n", sizeof s_DlgBody);
@@ -4817,7 +5069,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 					strcat(s_DlgBody, "Font 3\tStoryline / retro serif font", sizeof s_DlgBody);
 					PBE_ShowDialog(playerid, PBE_DLG_LABEL_FONT_PICK, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}Select Font Style", s_DlgBody, "Apply", "Back");
 				}
-				case 5:
+				case 6:
 				{
 					s_DlgBody[0] = '\0';
 					strcat(s_DlgBody, "Alignment\tDescription\n", sizeof s_DlgBody);
@@ -4826,7 +5078,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 					strcat(s_DlgBody, "Right (3)\tAligned to right border edge", sizeof s_DlgBody);
 					PBE_ShowDialog(playerid, PBE_DLG_LABEL_ALIGN_PICK, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}Select Text Alignment", s_DlgBody, "Apply", "Back");
 				}
-				case 6:
+				case 7:
 				{
 					EditorBars[sid][s][EBar_LabelAutoScale] = !EditorBars[sid][s][EBar_LabelAutoScale];
 					if (EditorBars[sid][s][EBar_LabelAutoScale])
@@ -4838,12 +5090,12 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 					PBE_SyncLabel(playerid, sid, s);
 					PBE_OpenLabelMenu(playerid, sid);
 				}
-				case 7:
+				case 8:
 				{
 					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter manual font size {38BDF8}ScaleX, ScaleY{FFFFFF} (disables Auto-Fit):\n(Current: {38BDF8}%.2f %.2f{FFFFFF})", EditorBars[sid][s][EBar_LabelScaleX], EditorBars[sid][s][EBar_LabelScaleY]);
 					PBE_ShowDialog(playerid, PBE_DLG_LABEL_SCALE_INP, DIALOG_STYLE_INPUT, "{38BDF8}Manual Letter Size", s_DlgBody, "Apply", "Back");
 				}
-				case 8:
+				case 9:
 				{
 					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter relative position offset {38BDF8}OffsetX, OffsetY{FFFFFF} in pixels:\n(Default: {10B981}0.0 0.0{FFFFFF}, Current: {38BDF8}%.2f %.2f{FFFFFF})", EditorBars[sid][s][EBar_LabelOffsetX], EditorBars[sid][s][EBar_LabelOffsetY]);
 					PBE_ShowDialog(playerid, PBE_DLG_LABEL_OFFSET_INP, DIALOG_STYLE_INPUT, "{38BDF8}Label Position Offset", s_DlgBody, "Apply", "Back");
@@ -4899,6 +5151,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				if (0 <= listitem < sizeof(g_PBESwatches))
 				{
 					EditorBars[sid][s][EBar_LabelColor] = g_PBESwatches[listitem][Swatch_RGBA];
+					EditorBars[sid][s][EBar_LabelFollowCol] = false;
 					EditorSession[sid][EP_Dirty] = true;
 					PBE_SyncLabel(playerid, sid, s);
 				}

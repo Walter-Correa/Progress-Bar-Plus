@@ -24,6 +24,16 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Verify Version Defines
+        id: ver
+        shell: pwsh
+        run: |
+          $m = Select-String -Path ProgressBar.inc -Pattern '#define\s+PROGRESSBAR_VERSION_STRING\s+"([^"]+)"'
+          if (-not $m) { throw "PROGRESSBAR_VERSION_STRING not found in ProgressBar.inc" }
+          $v = $m.Matches[0].Groups[1].Value
+          Write-Host "Verified include version: $v"
+          "version=$v" >> $env:GITHUB_OUTPUT
+
       - name: Verify & Compile Pawn Scripts
         shell: pwsh
         run: |
