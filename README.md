@@ -160,6 +160,22 @@ All 62 functions, macros, style enumerations, and compile-time constants are exh
 <details>
 <summary>Show the version history</summary>
 
+### 2.3.0 — 17/11/2026
+* **Opt-In Legacy Height Conversion (`convert_legacy`):**
+  * Replaced automatic conversion of small bar heights ($\le 4.5$) with an explicit opt-in parameter in `CreatePlayerProgressBar`: `bool:convert_legacy = false`. Deliberately thin progress lines created directly in code or in the Editor now strictly keep their intended pixel dimensions.
+  * Removed unexpected legacy scaling side-effects from `SetPlayerProgressBarSize`, `SetPlayerProgressBarHeight`, `SetPlayerProgressBarDirection`, and `SetPlayerProgressBarStyle`.
+* **Minimum Dimensions Engine & Safety Clamping:**
+  * Defined robust minimum boundary constants to guarantee borders and inner fills remain clearly visible and geometrically sound across all styles:
+    * Linear Bars (`PB_STYLE_BAR`): Minimum **3.0 x 3.0** (`PB_BAR_MIN_WIDTH`, `PB_BAR_MIN_HEIGHT`).
+    * Circular Gauges (`PB_STYLE_CIRCLE`): Minimum **8.0 x 8.0** (`PB_CIRCLE_MIN_WIDTH`, `PB_CIRCLE_MIN_HEIGHT`).
+    * Radial Rings (`PB_STYLE_RING`): Minimum **16.0 x 16.0** (`PB_RING_MIN_WIDTH`, `PB_RING_MIN_HEIGHT`).
+  * Added public inspection and enforcement helpers: `PB_GetMinDimensions(style, &Float:minW, &Float:minH)` and `PB_ClampSize(style, &Float:width, &Float:height)`.
+  * Clamped all dimension setters to prevent zero-area or distorted bars.
+* **Progress Bar Plus - Editor v2.3.0 Upgrades:**
+  * **Dedicated Move & Resize Menus:** Refactored dock buttons `[ MOVE ]` and `[ RESIZE ]` into dedicated selection dialogs allowing instant choice between Interactive Keyboard Control (`WASD` / Arrow keys) and Exact Numerical Input dialogs (screen coordinates and physical dimensions).
+  * **Decoupled Style Inspector:** Removed coordinates and dimensions from the `[ STYLE ]` menu, focusing it 100% on gauge style, fill direction, radial segments, segment scaling, border thickness, and text labels.
+  * Clamped minimum dimensions in the in-game editor during live keyboard transformation, manual input, 16:9 aspect lock, and integer rounding.
+
 ### 2.2.0 — 03/11/2026
 * **Intelligent Auto-Adaptive Text Stacking:**
   * Auto-adaptive label layout (`PB_FormatLabel` / `PB_IsLabelVertical`): automatically evaluates whether label text fits horizontally inside the bar's inner width. When narrow vertical bars cannot accommodate horizontal text, characters automatically stack vertically using `~n~` linebreaks while preserving embedded color tags (`{RRGGBB}`) and geometric center alignment.

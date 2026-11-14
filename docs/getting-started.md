@@ -57,7 +57,7 @@ If your existing codebase uses `progress2`, you can replace the include file wit
 | `INVALID_PLAYER_BAR_ID` | `INVALID_PLAYER_BAR_ID` (-1) | Identical |
 | `SetPlayerProgressBarColor` | `SetPlayerProgressBarColour` | Fully Supported (Aliased) |
 | `GetPlayerProgressBarColor` | `GetPlayerProgressBarColour` | Fully Supported (Aliased) |
-| `Float:height = 3.2` | Auto-Converted to $\approx 8.0$ px | Automatic 2.5x sprite scaler (see below) |
+| `Float:height = 3.2` | Explicit 2.5x Conversion | Optional `convert_legacy = true` in `CreatePlayerProgressBar` |
 
 ### Important Migration Nuances: Tagging & Coordinate Scaling
 
@@ -70,13 +70,30 @@ In `progress2`, all bar variables were declared with the strong tag `PlayerBar:`
 ```
 This guarantees zero tag mismatch compiler warnings (Warning 213) across legacy scripts.
 
-#### 2. Height Parameter Auto-Conversion
-- In legacy `progress2`, bars were drawn as GTA text font boxes where `height` represented **font letter size Y divided by 10** (default was `3.2`). In the GTA SA font rendering pipeline, a letter size Y of `0.32` results in an on-screen box approximately **~8.0 pixels high** on a 640x448 canvas.
-- In **Progress Bar Plus**, bars are rendered as real hardware quad sprites (`LD_SPAC:white`) where dimensions represent true screen pixels. A raw sprite with height `3.2` would otherwise display as a micro-thin sliver.
-- **Progress Bar Plus automatically detects legacy heights**: In `CreatePlayerProgressBar`, `SetPlayerProgressBarHeight`, and `SetPlayerProgressBarSize`, if `height <= 4.5` on horizontal linear bars, it automatically applies an internal $2.5\times$ conversion ($3.2 \times 2.5 = 8.0$ px, min 6.0 px). This ensures existing `progress2` bars look virtually identical in proportion on your server with zero code modifications!
-- *To disable auto-conversion and use raw sub-4.5px heights:* define `#define PB_NO_LEGACY_HEIGHT_CONVERT` before `#include <ProgressBar>`.
+#### 2. Height Parameter & Legacy Conversion
+- In legacy `progress2`, bars were drawn using a GTA font-box text rendering hack where `height` represented **font letter size Y divided by 10** (default was `3.2`). In the GTA SA font pipeline, a letter size Y of `0.32` produced an on-screen box approximately **~8.0 pixels high** on a 640x448 canvas.
+- In **Progress Bar Plus**, bars are rendered as crisp hardware quad sprites (`LD_SPAC:white`) where `width` and `height` represent true 1:1 pixel coordinate units.
+- **No Unwanted Auto-Conversion:** By default, Progress Bar Plus preserves your exact pixel dimensions without unexpected automatic scaling. If you are migrating legacy code with sub-4.5 font-box heights (such as `3.2`), you can enable the $2.5\times$ scaler by passing the optional parameter `convert_legacy = true` to `CreatePlayerProgressBar`:
+```pawn
+// Converts legacy height 3.2 to 8.0 pixels:
+new PlayerBar:myBar = CreatePlayerProgressBar(
+    playerid, 548.0, 66.0, 60.0, 3.2,
+    PB_DEFAULT_COLOUR, 100.0, PB_DIR_RIGHT, PB_BORDER_DEFAULT, 0,
+    PB_STYLE_BAR, PB_RING_SEGMENTS, PB_RING_SEGMENT_SCALE,
+    true // bool:convert_legacy
+);
+```
+*(Alternatively, you can simply update the height argument directly to your desired pixel size, e.g. `8.0` or `10.0`).*
 
-#### 3. PlayerTextDraw Limits (256 per player)
+#### 3. Guaranteed Minimum Dimensions
+To ensure borders and inner fill ("recheio") remain clearly visible across all screen resolutions and styles, Progress Bar Plus enforces well-defined minimum dimension boundaries:
+* **Rectangular Bars (`PB_STYLE_BAR`):** Minimum **`3.0 x 3.0`** (`PB_BAR_MIN_WIDTH`, `PB_BAR_MIN_HEIGHT`). Guarantees at least $1.0$ px inner fill (`PB_MIN_INNER`) and visible border even with default borders.
+* **Circular Gauges (`PB_STYLE_CIRCLE`):** Minimum **`8.0 x 8.0`** (`PB_CIRCLE_MIN_WIDTH`, `PB_CIRCLE_MIN_HEIGHT`). Guarantees clear concentric disc expansion and discernible border ring.
+* **Radial Rings (`PB_STYLE_RING`):** Minimum **`16.0 x 16.0`** (`PB_RING_MIN_WIDTH`, `PB_RING_MIN_HEIGHT`). Guarantees an open central hole, non-overlapping orbit ($px > 0$), and distinct dot chits.
+
+If any bar is created or resized below these thresholds, the library automatically clamps dimensions to the minimum allowable limit rather than allowing distorted or invisible elements.
+
+#### 4. PlayerTextDraw Limits (256 per player)
 - SA-MP and open.mp enforce a hard engine ceiling of **256 PlayerTextDraws** per connected player (`MAX_PLAYER_TEXT_DRAWS`).
 - Classic Linear Bars and Circular Gauges consume 3 PlayerTextDraws (or 4 with label enabled).
 - Radial Rings consume **$2 \times \text{segments}$** textdraws ($48$ TDs for a 24-segment ring; $120$ TDs for a 60-segment ring).
