@@ -71,21 +71,21 @@ Progress Bar Plus - Editor/
 When you open `/pbe`, a floating interactive control dock appears on your screen:
 
 ```
-[ Style ] [ Color ] [ Transform ] [ Animate ] [ Align ] [ Duplicate ] [ Delete ] [ + Layer ] [ Save ] [ Export ] [ Close ]
+[ PROJECT ] [ + CREATE ] [ LAYERS ] [ MOVE ] [ RESIZE ] [ STYLE ] [ COLORS ] [ ANIMATE ] [ TOOLS ] [ EXPORT ] [ VIEW ]
 ```
 
 ### Dock Buttons Reference
-1. **`Style`:** Switch between Linear Bar, Radial Ring, and Circular Gauge. Configure ring segments ($4$ to $60$), segment scale ($0.10$ to $3.00$), and border thickness.
-2. **`Color`:** Open the 60-swatch palette or enter raw RGBA hex codes. Configure bar fill color, background dimming, border color, and Dynamic Health Gradients.
-3. **`Transform`:** Toggle keyboard-driven transformation modes: Move, Resize, Border adjustment, or Value scrubbing.
-4. **`Animate`:** Test Smooth Lerp transitions, AutoFill cyclic animations, Blinking alerts, and Minimum Value range thresholds.
-5. **`Align`:** Open precision centering tools, 8 GTA:SA default HUD anchor slots, and multi-layer distribution.
-6. **`Duplicate`:** Clone the active layer with all its properties, offsets, and styles intact.
-7. **`Delete`:** Safely remove the active layer from the project.
-8. **`+ Layer`:** Add a new progress bar layer (supports up to $20$ layers per project).
-9. **`Save`:** Save your project to `scriptfiles/ProgressBarPlus/projects/<name>.pbp`.
-10. **`Export`:** Generate production-ready Pawn code formatted for Gamemodes or Filterscripts.
-11. **`Close`:** Exit the editor and restore normal gameplay controls.
+1. **`PROJECT`:** Manage workspace files: New, Open/Load project, Save, Save As, Delete, or Import existing Pawn code/PBP files.
+2. **`+ CREATE`:** Add a new progress bar layer (supports up to $20$ layers per project) or instantiate ready-made HUD templates.
+3. **`LAYERS`:** Manage active layers: select, rename, duplicate, reorder Z-Index (Bring Forward/Send Backward), toggle visibility, or delete.
+4. **`MOVE`:** Open positioning menu: choose between **Interactive Keyboard Mode** (`WASD` / Arrow keys) for real-time movement, or **Enter Exact Screen Coordinates** $(X, Y)$ via dialog input.
+5. **`RESIZE`:** Open resizing menu: choose between **Interactive Keyboard Mode** (`WASD` / Arrow keys) for real-time sizing with aspect lock, or **Enter Exact Dimensions** (Width, Height) via dialog input (automatically bounded by style minimums).
+6. **`STYLE`:** Switch visual gauge style (Linear Bar, Radial Ring, Circular Disc), fill direction, ring segments ($4$ to $60$), ring scale ($0.10$ to $3.00$), interactive border thickness scrubber / exact thickness, and configure attached text labels.
+7. **`COLORS`:** Open the 60-swatch palette or enter raw RGBA hex codes. Configure bar fill color, background dimming, border color, and Dynamic Health Gradients.
+8. **`ANIMATE`:** Test Smooth Lerp transitions, AutoFill cyclic animations, Blinking alerts, interactive value scrubbing, and minimum/maximum value thresholds.
+9. **`TOOLS`:** Precision alignment suite: Center horizontally/vertically/both, GTA:SA default HUD anchor slots, relative multi-bar edge alignment & stacking, 16:9 perfect circle ratio, integer snapping, and 1-step Undo.
+10. **`EXPORT`:** Generate production-ready Pawn code formatted for Gamemodes or Filterscripts.
+11. **`VIEW`:** Configure editor environment: toggle background preview grid, cycle dock position (Bottom, Top, Minimized HUD preview), view keybinding guide, or exit editor.
 
 ### Dock Modes & Live Telemetry
 * **Dock Position:** You can cycle the dock between **Bottom Dock**, **Top Dock**, and **Minimized Preview** (hides all editor textdraws to let you inspect your clean HUD overlay).

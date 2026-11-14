@@ -178,14 +178,18 @@ enum
 	PBE_DLG_RENAME_BAR,
 	PBE_DLG_DELETE_BAR_CONF,
 
+	PBE_DLG_MOVE_MENU,
+	PBE_DLG_EXACT_POS_INPUT,
+
+	PBE_DLG_RESIZE_MENU,
+	PBE_DLG_EXACT_SIZE_INPUT,
+
 	PBE_DLG_STYLE_MENU,
 	PBE_DLG_STYLE_PICK,
 	PBE_DLG_DIRECTION_PICK,
 	PBE_DLG_SEGMENTS_INPUT,
 	PBE_DLG_SEG_SCALE_INPUT,
 	PBE_DLG_BORDER_SIZE_INP,
-	PBE_DLG_EXACT_POS_INPUT,
-	PBE_DLG_EXACT_SIZE_INPUT,
 
 	PBE_DLG_LABEL_MENU,
 	PBE_DLG_LABEL_PRESETS,
@@ -1736,22 +1740,25 @@ public PBE_TransformTick(playerid)
 	else if (mode == PBE_MODE_RESIZE)
 	{
 		new Float:nw, Float:nh;
+		new Float:minW, Float:minH;
+		PB_GetMinDimensions(EditorBars[sid][s][EBar_Style], minW, minH);
 		if (EditorBars[sid][s][EBar_Style] != PB_STYLE_BAR && EditorSession[sid][EP_AspectLock])
 		{
 			new Float:delta = (dx != 0.0) ? dx : -dy;
 			nw = EditorBars[sid][s][EBar_W] + delta;
 			new Float:maxW = 448.0 / PB_BORDER_Y_RATIO;
-			if (nw < 3.0) nw = 3.0;
+			if (nw < minW) nw = minW;
 			if (nw > maxW) nw = maxW;
 			nh = nw * PB_BORDER_Y_RATIO;
+			if (nh < minH) nh = minH;
 		}
 		else
 		{
 			nw = EditorBars[sid][s][EBar_W] + dx;
 			nh = EditorBars[sid][s][EBar_H] + dy;
-			if (nw < 3.0) nw = 3.0;
+			if (nw < minW) nw = minW;
 			if (nw > 640.0) nw = 640.0;
-			if (nh < 3.0) nh = 3.0;
+			if (nh < minH) nh = minH;
 			if (nh > 448.0) nh = 448.0;
 		}
 
@@ -3166,6 +3173,49 @@ static stock PBE_OpenLayerActionsMenu(playerid, sid)
 	PBE_ShowDialog(playerid, PBE_DLG_LAYER_ACTIONS, DIALOG_STYLE_TABLIST_HEADERS, title, s_DlgBody, "Execute", "Layers");
 }
 
+static stock PBE_OpenMoveMenu(playerid, sid)
+{
+	if (!PBE_HasActiveBar(sid))
+	{
+		PBE_SendMsg(playerid, PBE_CHAT_WARN, "{F59E0B}No Active Layer: ", "Create or select a progress bar layer first.");
+		PBE_SetCursor(playerid, sid, true);
+		return;
+	}
+
+	new s = EditorSession[sid][EP_Selected];
+	s_DlgBody[0] = '\0';
+	strcat(s_DlgBody, "Positioning Option\tDetails\n", sizeof s_DlgBody);
+	strcat(s_DlgBody, "{38BDF8}Move with Keyboard (WASD / Arrows)\t{94A3B8}Interactive live positioning (ALT fine, SHIFT fast)\n", sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{10B981}Enter Exact Screen Coordinates\t{FFFFFF}X: %.2f, Y: %.2f", EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	PBE_ShowDialog(playerid, PBE_DLG_MOVE_MENU, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}PB Editor {FFFFFF}- Position & Movement", s_DlgBody, "Select", "Close");
+}
+
+static stock PBE_OpenResizeMenu(playerid, sid)
+{
+	if (!PBE_HasActiveBar(sid))
+	{
+		PBE_SendMsg(playerid, PBE_CHAT_WARN, "{F59E0B}No Active Layer: ", "Create or select a progress bar layer first.");
+		PBE_SetCursor(playerid, sid, true);
+		return;
+	}
+
+	new s = EditorSession[sid][EP_Selected];
+	new Float:minW, Float:minH;
+	PB_GetMinDimensions(EditorBars[sid][s][EBar_Style], minW, minH);
+
+	s_DlgBody[0] = '\0';
+	strcat(s_DlgBody, "Resizing Option\tDetails\n", sizeof s_DlgBody);
+	strcat(s_DlgBody, "{38BDF8}Resize with Keyboard (WASD / Arrows)\t{94A3B8}Interactive live scaling (ALT fine, SHIFT fast)\n", sizeof s_DlgBody);
+
+	format(s_DlgRow, sizeof s_DlgRow, "{10B981}Enter Exact Dimensions (Width, Height)\t{FFFFFF}%.2f x %.2f {94A3B8}(Min: %.1f x %.1f)", EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H], minW, minH);
+	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
+
+	PBE_ShowDialog(playerid, PBE_DLG_RESIZE_MENU, DIALOG_STYLE_TABLIST_HEADERS, "{38BDF8}PB Editor {FFFFFF}- Size & Dimensions", s_DlgBody, "Select", "Close");
+}
+
 static stock PBE_OpenStyleMenu(playerid, sid)
 {
 	if (!PBE_HasActiveBar(sid))
@@ -3199,12 +3249,6 @@ static stock PBE_OpenStyleMenu(playerid, sid)
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
 	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Exact Border Thickness\t{94A3B8}%.2f px (0.50 - 5.00)\n", EditorBars[sid][s][EBar_Border]);
-	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
-
-	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Exact Screen Coordinates (X, Y)\t{94A3B8}%.2f, %.2f\n", EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
-	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
-
-	format(s_DlgRow, sizeof s_DlgRow, "{FFFFFF}Exact Dimensions (Width, Height)\t{94A3B8}%.2f x %.2f\n", EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
 	strcat(s_DlgBody, s_DlgRow, sizeof s_DlgBody);
 
 	new lblTag[64];
@@ -3998,9 +4042,13 @@ public OnPlayerKeyStateChange(playerid, PBE_KEY_TAG newkeys, PBE_KEY_TAG oldkeys
 					EditorSession[sid][EP_AspectLock] = !EditorSession[sid][EP_AspectLock];
 					if (EditorSession[sid][EP_AspectLock])
 					{
+						new Float:minW, Float:minH;
+						PB_GetMinDimensions(EditorBars[sid][s][EBar_Style], minW, minH);
 						new Float:maxW = 448.0 / PB_BORDER_Y_RATIO;
+						if (EditorBars[sid][s][EBar_W] < minW) EditorBars[sid][s][EBar_W] = minW;
 						if (EditorBars[sid][s][EBar_W] > maxW) EditorBars[sid][s][EBar_W] = maxW;
 						EditorBars[sid][s][EBar_H] = EditorBars[sid][s][EBar_W] * PB_BORDER_Y_RATIO;
+						if (EditorBars[sid][s][EBar_H] < minH) EditorBars[sid][s][EBar_H] = minH;
 						if (IsValidPlayerProgressBar(playerid, EditorBars[sid][s][EBar_Handle]))
 						{
 							SetPlayerProgressBarSize(playerid, EditorBars[sid][s][EBar_Handle], EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
@@ -4064,8 +4112,8 @@ public OnPlayerClickTextDraw(playerid, Text:clickedid)
 					case 0:  PBE_OpenProjectMenu(playerid, sid);
 					case 1:  PBE_OpenCreateMenu(playerid, sid);
 					case 2:  PBE_OpenLayersMenu(playerid, sid);
-					case 3:  PBE_StartTransformMode(playerid, sid, PBE_MODE_MOVE);
-					case 4:  PBE_StartTransformMode(playerid, sid, PBE_MODE_RESIZE);
+					case 3:  PBE_OpenMoveMenu(playerid, sid);
+					case 4:  PBE_OpenResizeMenu(playerid, sid);
 					case 5:  PBE_OpenStyleMenu(playerid, sid);
 					case 6:  PBE_OpenColorMenu(playerid, sid);
 					case 7:  PBE_OpenAnimateMenu(playerid, sid);
@@ -4788,17 +4836,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter exact border thickness ({38BDF8}0.50 to 5.00{FFFFFF}, current: %.2f):", EditorBars[sid][s][EBar_Border]);
 					PBE_ShowDialog(playerid, PBE_DLG_BORDER_SIZE_INP, DIALOG_STYLE_INPUT, "{38BDF8}Exact Border Thickness", s_DlgBody, "Apply", "Back");
 				}
-				case 6:
-				{
-					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter exact screen {38BDF8}X, Y{FFFFFF} coordinates separated by a comma or space\n(Current: {10B981}%.2f, %.2f{FFFFFF}):", EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
-					PBE_ShowDialog(playerid, PBE_DLG_EXACT_POS_INPUT, DIALOG_STYLE_INPUT, "{38BDF8}Exact Screen Coordinates (X, Y)", s_DlgBody, "Apply", "Back");
-				}
-				case 7:
-				{
-					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter exact {38BDF8}Width, Height{FFFFFF} separated by a comma or space\n(Current: {10B981}%.2f, %.2f{FFFFFF}):", EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H]);
-					PBE_ShowDialog(playerid, PBE_DLG_EXACT_SIZE_INPUT, DIALOG_STYLE_INPUT, "{38BDF8}Exact Dimensions (Width, Height)", s_DlgBody, "Apply", "Back");
-				}
-				case 8: PBE_OpenLabelMenu(playerid, sid);
+				case 6: PBE_OpenLabelMenu(playerid, sid);
 			}
 			return 1;
 		}
@@ -4827,10 +4865,14 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
 				PBE_SaveUndo(sid, "Change Visual Style");
 				EditorBars[sid][s][EBar_Style] = newStyle;
-				if (newStyle != PB_STYLE_BAR && EditorBars[sid][s][EBar_H] < 20.0)
+				new Float:minW, Float:minH;
+				PB_GetMinDimensions(newStyle, minW, minH);
+				if (EditorBars[sid][s][EBar_W] < minW) EditorBars[sid][s][EBar_W] = minW;
+				if (EditorBars[sid][s][EBar_H] < minH) EditorBars[sid][s][EBar_H] = minH;
+				if (newStyle != PB_STYLE_BAR && EditorSession[sid][EP_AspectLock])
 				{
-					if (EditorBars[sid][s][EBar_W] > 80.0) EditorBars[sid][s][EBar_W] = 56.0;
-					EditorBars[sid][s][EBar_H] = EditorBars[sid][s][EBar_W] * PB_BORDER_Y_RATIO;
+					if (EditorBars[sid][s][EBar_H] < EditorBars[sid][s][EBar_W] * PB_BORDER_Y_RATIO)
+						EditorBars[sid][s][EBar_H] = EditorBars[sid][s][EBar_W] * PB_BORDER_Y_RATIO;
 				}
 				EditorSession[sid][EP_Dirty] = true;
 				if (IsValidPlayerProgressBar(playerid, EditorBars[sid][s][EBar_Handle]))
@@ -4955,6 +4997,26 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			return 1;
 		}
 
+		case PBE_DLG_MOVE_MENU:
+		{
+			if (!response || !PBE_HasActiveBar(sid))
+			{
+				PBE_SetCursor(playerid, sid, true);
+				return 1;
+			}
+			switch (listitem)
+			{
+				case 0: PBE_StartTransformMode(playerid, sid, PBE_MODE_MOVE);
+				case 1:
+				{
+					new s = EditorSession[sid][EP_Selected];
+					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter exact screen {38BDF8}X, Y{FFFFFF} coordinates separated by a comma or space\n(Current: {10B981}%.2f, %.2f{FFFFFF}):", EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
+					PBE_ShowDialog(playerid, PBE_DLG_EXACT_POS_INPUT, DIALOG_STYLE_INPUT, "{38BDF8}Exact Screen Coordinates (X, Y)", s_DlgBody, "Apply", "Back");
+				}
+			}
+			return 1;
+		}
+
 		case PBE_DLG_EXACT_POS_INPUT:
 		{
 			if (response && PBE_HasActiveBar(sid))
@@ -4972,13 +5034,38 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 						SetPlayerProgressBarPos(playerid, EditorBars[sid][s][EBar_Handle], EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
 					}
 					PBE_RefreshStatusHUD(playerid, sid);
+					new msg[96];
+					format(msg, sizeof msg, "X: %.2f, Y: %.2f", EditorBars[sid][s][EBar_X], EditorBars[sid][s][EBar_Y]);
+					PBE_SendMsg(playerid, PBE_CHAT_OK, "{10B981}Position Updated: ", msg);
 				}
 				else
 				{
 					PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Invalid Format: ", "Enter two numbers separated by a comma or space (e.g. 320.0, 224.0).");
 				}
 			}
-			PBE_OpenStyleMenu(playerid, sid);
+			PBE_OpenMoveMenu(playerid, sid);
+			return 1;
+		}
+
+		case PBE_DLG_RESIZE_MENU:
+		{
+			if (!response || !PBE_HasActiveBar(sid))
+			{
+				PBE_SetCursor(playerid, sid, true);
+				return 1;
+			}
+			switch (listitem)
+			{
+				case 0: PBE_StartTransformMode(playerid, sid, PBE_MODE_RESIZE);
+				case 1:
+				{
+					new s = EditorSession[sid][EP_Selected];
+					new Float:minW, Float:minH;
+					PB_GetMinDimensions(EditorBars[sid][s][EBar_Style], minW, minH);
+					format(s_DlgBody, sizeof s_DlgBody, "{FFFFFF}Enter exact {38BDF8}Width, Height{FFFFFF} separated by a comma or space\n(Current: {10B981}%.2f, %.2f{FFFFFF} | Min: {F59E0B}%.1f, %.1f{FFFFFF}):", EditorBars[sid][s][EBar_W], EditorBars[sid][s][EBar_H], minW, minH);
+					PBE_ShowDialog(playerid, PBE_DLG_EXACT_SIZE_INPUT, DIALOG_STYLE_INPUT, "{38BDF8}Exact Dimensions (Width, Height)", s_DlgBody, "Apply", "Back");
+				}
+			}
 			return 1;
 		}
 
@@ -4989,31 +5076,34 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				new t1[32], t2[32];
 				if (PBE_SplitTwoTokens(inputtext, t1, sizeof t1, t2, sizeof t2))
 				{
+					new s = EditorSession[sid][EP_Selected];
+					new Float:minW, Float:minH;
+					PB_GetMinDimensions(EditorBars[sid][s][EBar_Style], minW, minH);
 					new Float:nw = floatstr(t1), Float:nh = floatstr(t2);
-					if (nw >= 3.0 && nh >= 3.0)
+					if (nw < minW) nw = minW;
+					if (nh < minH) nh = minH;
+					if (nw > 640.0) nw = 640.0;
+					if (nh > 448.0) nh = 448.0;
+
+					PBE_SaveUndo(sid, "Set Exact Dimensions");
+					EditorBars[sid][s][EBar_W] = nw;
+					EditorBars[sid][s][EBar_H] = nh;
+					EditorSession[sid][EP_Dirty] = true;
+					if (IsValidPlayerProgressBar(playerid, EditorBars[sid][s][EBar_Handle]))
 					{
-						new s = EditorSession[sid][EP_Selected];
-						PBE_SaveUndo(sid, "Set Exact Dimensions");
-						EditorBars[sid][s][EBar_W] = nw;
-						EditorBars[sid][s][EBar_H] = nh;
-						EditorSession[sid][EP_Dirty] = true;
-						if (IsValidPlayerProgressBar(playerid, EditorBars[sid][s][EBar_Handle]))
-						{
-							SetPlayerProgressBarSize(playerid, EditorBars[sid][s][EBar_Handle], nw, nh);
-						}
-						PBE_RefreshStatusHUD(playerid, sid);
+						SetPlayerProgressBarSize(playerid, EditorBars[sid][s][EBar_Handle], nw, nh);
 					}
-					else
-					{
-						PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Too Small: ", "Width and Height must each be at least 3.0.");
-					}
+					PBE_RefreshStatusHUD(playerid, sid);
+					new msg[96];
+					format(msg, sizeof msg, "Width: %.1f, Height: %.1f", nw, nh);
+					PBE_SendMsg(playerid, PBE_CHAT_OK, "{10B981}Dimensions Updated: ", msg);
 				}
 				else
 				{
 					PBE_SendMsg(playerid, PBE_CHAT_ERR, "{EF4444}Invalid Format: ", "Enter Width and Height separated by a comma or space (e.g. 80.0, 9.0).");
 				}
 			}
-			PBE_OpenStyleMenu(playerid, sid);
+			PBE_OpenResizeMenu(playerid, sid);
 			return 1;
 		}
 
@@ -5893,10 +5983,12 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 					PBE_SaveUndo(sid, "Round to Integers");
 					EditorBars[sid][s][EBar_X] = float(floatround(EditorBars[sid][s][EBar_X]));
 					EditorBars[sid][s][EBar_Y] = float(floatround(EditorBars[sid][s][EBar_Y]));
+					new Float:minW, Float:minH;
+					PB_GetMinDimensions(EditorBars[sid][s][EBar_Style], minW, minH);
 					EditorBars[sid][s][EBar_W] = float(floatround(EditorBars[sid][s][EBar_W]));
 					EditorBars[sid][s][EBar_H] = float(floatround(EditorBars[sid][s][EBar_H]));
-					if (EditorBars[sid][s][EBar_W] < 3.0) EditorBars[sid][s][EBar_W] = 3.0;
-					if (EditorBars[sid][s][EBar_H] < 3.0) EditorBars[sid][s][EBar_H] = 3.0;
+					if (EditorBars[sid][s][EBar_W] < minW) EditorBars[sid][s][EBar_W] = minW;
+					if (EditorBars[sid][s][EBar_H] < minH) EditorBars[sid][s][EBar_H] = minH;
 					EditorSession[sid][EP_Dirty] = true;
 					if (IsValidPlayerProgressBar(playerid, h))
 					{

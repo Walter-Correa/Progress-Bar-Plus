@@ -34,13 +34,14 @@ stock PlayerBar:CreatePlayerProgressBar(
     bordercolour = 0,
     style = PB_STYLE_BAR,
     segments = PB_RING_SEGMENTS,
-    Float:segmentscale = PB_RING_SEGMENT_SCALE
+    Float:segmentscale = PB_RING_SEGMENT_SCALE,
+    bool:convert_legacy = false
 );
 ```
 Allocates, configures, and initializes a new progress bar instance on the player's screen canvas.
 * **`playerid`:** Player who owns the progress bar.
 * **`x`, `y`:** Screen space coordinates ($0.0$ to $640.0$, $0.0$ to $448.0$).
-* **`width`, `height`:** Outer dimensions in TextDraw coordinate units.
+* **`width`, `height`:** Outer dimensions in TextDraw coordinate units (automatically clamped to style minimum limits).
 * **`colour`:** Bar fill color (RGBA hex, defaults to `0xE74C3CFF`).
 * **`max`:** Upper limit of the progress range (defaults to `100.0`).
 * **`direction`:** Fill progression vector (`PB_DIR_RIGHT`, `PB_DIR_LEFT`, `PB_DIR_UP`, `PB_DIR_DOWN`).
@@ -49,6 +50,7 @@ Allocates, configures, and initializes a new progress bar instance on the player
 * **`style`:** Visual rendering style (`PB_STYLE_BAR`, `PB_STYLE_RING`, `PB_STYLE_CIRCLE`).
 * **`segments`:** Number of radial segments if style is Ring ($4$ to $60$, default `24`).
 * **`segmentscale`:** Ring chit dot scale multiplier ($0.10$ to $3.00$, default `1.00`).
+* **`convert_legacy`:** *(Optional, default: `false`)* When set to `true`, automatically applies a $2.5\times$ scale multiplier (min $6.0$ px) to legacy `progress2` font-box heights ($\le 4.5$) on horizontal linear bars.
 * **Returns:** The newly allocated `barid` on success, or `INVALID_PLAYER_BAR_ID` (`-1`) on failure.
 
 ---
@@ -179,7 +181,7 @@ Sets or retrieves the screen anchor coordinates ($0.0$ to $640.0$, $0.0$ to $448
 stock SetPlayerProgressBarSize(playerid, barid, Float:width, Float:height);
 stock GetPlayerProgressBarSize(playerid, barid, &Float:width, &Float:height);
 ```
-Sets or retrieves both outer dimensions simultaneously in TextDraw coordinate units (for horizontal bars, legacy `height <= 4.5` is automatically auto-converted to hardware quad pixels).
+Sets or retrieves both outer dimensions simultaneously in TextDraw coordinate units (automatically clamped to style minimum limits).
 * **Returns:** `1` on success, `0` on failure.
 
 ---
@@ -189,7 +191,7 @@ Sets or retrieves both outer dimensions simultaneously in TextDraw coordinate un
 stock SetPlayerProgressBarWidth(playerid, barid, Float:width);
 stock Float:GetPlayerProgressBarWidth(playerid, barid);
 ```
-Sets or retrieves the outer width dimension.
+Sets or retrieves the outer width dimension (automatically clamped to style minimum limit).
 * **Returns:** `1` on success, `0` on failure (`GetPlayerProgressBarWidth` returns `Float:width` or `0.0`).
 
 ---
@@ -199,7 +201,7 @@ Sets or retrieves the outer width dimension.
 stock SetPlayerProgressBarHeight(playerid, barid, Float:height);
 stock Float:GetPlayerProgressBarHeight(playerid, barid);
 ```
-Sets or retrieves the outer height dimension (for horizontal bars, legacy `height <= 4.5` is automatically auto-converted to hardware quad pixels).
+Sets or retrieves the outer height dimension (automatically clamped to style minimum limit).
 * **Returns:** `1` on success, `0` on failure (`GetPlayerProgressBarHeight` returns `Float:height` or `0.0`).
 
 ---
@@ -568,6 +570,22 @@ Computes the exact number of PlayerTextDraw elements required by a bar given its
 
 ---
 
+### `PB_GetMinDimensions`
+```pawn
+stock PB_GetMinDimensions(style, &Float:minW, &Float:minH);
+```
+Retrieves the minimum allowable outer width and height for the given bar style (`PB_STYLE_BAR`, `PB_STYLE_RING`, `PB_STYLE_CIRCLE`).
+
+---
+
+### `PB_ClampSize`
+```pawn
+stock PB_ClampSize(style, &Float:width, &Float:height);
+```
+Enforces style minimum boundaries on `width` and `height`, preventing invisible or distorted bar geometry.
+
+---
+
 ## 9. Constants & Enumerations
 
 ### Bar Styles (`ProgressBarStyle`)
@@ -637,6 +655,12 @@ You can customize the following compile-time constants before including `<Progre
 | `PB_BLINK_MIN` | `50` | Milliseconds | Minimum safe threshold for blinking alerts to prevent timer flooding. |
 | `PB_BLINK_MAX` | `60000` | Milliseconds | Maximum allowable threshold for blinking alerts. |
 | `PB_CHIT_SCALE` | `1.50` | Multiplier | Native sprite scaling factor correcting `LD_BEAT:chit` internal texture margins. |
+| `PB_BAR_MIN_WIDTH` | `3.0` | Virtual pixels | Minimum allowable width for rectangular linear bars (`PB_STYLE_BAR`). |
+| `PB_BAR_MIN_HEIGHT` | `3.0` | Virtual pixels | Minimum allowable height for rectangular linear bars (`PB_STYLE_BAR`). |
+| `PB_CIRCLE_MIN_WIDTH` | `8.0` | Virtual pixels | Minimum allowable width for circular gauges (`PB_STYLE_CIRCLE`). |
+| `PB_CIRCLE_MIN_HEIGHT` | `8.0` | Virtual pixels | Minimum allowable height for circular gauges (`PB_STYLE_CIRCLE`). |
+| `PB_RING_MIN_WIDTH` | `16.0` | Virtual pixels | Minimum allowable width for segmented radial rings (`PB_STYLE_RING`). |
+| `PB_RING_MIN_HEIGHT` | `16.0` | Virtual pixels | Minimum allowable height for segmented radial rings (`PB_STYLE_RING`). |
 
 ```pawn
 // Example: Customizing server capacity before including ProgressBar
